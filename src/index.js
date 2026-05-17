@@ -10239,6 +10239,14 @@ client.on("qr", (qr) => {
   qrcode.generate(qr, { small: true });
 });
 
+client.on("loading_screen", (percent, message) => {
+  console.log(`Carregando WhatsApp: ${percent}% - ${message}`);
+});
+
+client.on("change_state", (state) => {
+  console.log(`Estado do WhatsApp: ${state}`);
+});
+
 client.on("authenticated", () => {
   console.log("Autenticado.");
 });
@@ -10246,6 +10254,11 @@ client.on("authenticated", () => {
 client.on("ready", () => {
   console.log(`${BOT_NAME} pronto.`);
   console.log(`Grupo permitido: ${ALLOWED_GROUP_ID || "não configurado"}`);
+
+  if (!ALLOWED_GROUP_ID) {
+    console.log("ALLOWED_GROUP_ID vazio: no grupo, envie !id para pegar o ID e coloque no .env.");
+  }
+
   scheduleStoredGlobalEffects();
   startHeyYaPassiveLoopV3();
   startHolyCorpseSpawnLoopV1();
@@ -10269,11 +10282,25 @@ client.on("message", async (message) => {
     if (await adminRootPrivateGateV3(message, chat, rawBody)) return;
 
     if (!chat.isGroup) return;
-    if (!ALLOWED_GROUP_ID || chat.id._serialized !== ALLOWED_GROUP_ID) return;
-
     if (!rawBody.startsWith(COMMAND_PREFIX)) return;
 
     const { command, arg } = parseCommand(rawBody);
+
+    if (command === "!id") {
+      await replySafe(message, `Grupo: ${chat.name}\nID: ${chat.id._serialized}`);
+      return;
+    }
+
+    if (!ALLOWED_GROUP_ID) {
+      console.log(`Comando ignorado porque ALLOWED_GROUP_ID está vazio: ${rawBody}`);
+      return;
+    }
+
+    if (chat.id._serialized !== ALLOWED_GROUP_ID) {
+      console.log(`Comando ignorado por grupo diferente: recebido=${chat.id._serialized} permitido=${ALLOWED_GROUP_ID}`);
+      return;
+    }
+
     const state = loadState();
 
     normalizeAllPlayers(state);
