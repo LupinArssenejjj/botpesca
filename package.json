@@ -1,10 +1,12 @@
+// package.json
 {
   "name": "bot-pescaria",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Bot de pescaria para WhatsApp",
+  "main": "src/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node src/index.js",
+    "dev": "node src/index.js"
   },
   "keywords": [],
   "author": "",
