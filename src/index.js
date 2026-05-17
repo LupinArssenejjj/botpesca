@@ -4270,6 +4270,20 @@ async function forceMandomTimelineActivationV1(message, state, player) {
     return false;
   }
 
+  const stand = getStandDef(player);
+
+  if (!stand) {
+    await replySafe(message, `🪬 Você ainda não tem Stand.`);
+    return true;
+  }
+
+  const cooldownRemaining = getStandCooldownRemainingMs(player);
+
+  if (cooldownRemaining > 0) {
+    await replySafe(message, `⏳ Sua habilidade de Stand ainda está em cooldown por *${formatDurationCompact(cooldownRemaining)}*.`);
+    return true;
+  }
+
   if (typeof activateMandom !== "function") {
     await replySafe(
       message,
@@ -4282,7 +4296,8 @@ async function forceMandomTimelineActivationV1(message, state, player) {
     return true;
   }
 
-  await activateMandom(state, player);
+  const resultText = await activateMandom(state, player);
+  await replySafe(message, resultText);
   return true;
 }
 
@@ -4863,6 +4878,10 @@ async function activateMandom(state, player) {
     }
   ]);
 
+  if (typeof rescheduleGlobalEffectsFromState === "function") {
+    rescheduleGlobalEffectsFromState(restoredState);
+  }
+
   const summary = buildMandomCoreSummaryV2(beforeState, restoredState, player.id);
 
   return [
@@ -5384,6 +5403,23 @@ function scheduleStoredGlobalEffects() {
     }
   }
 }
+
+function rescheduleGlobalEffectsFromState(state) {
+  for (const timer of globalEffectTimers.values()) {
+    clearTimeout(timer);
+  }
+
+  globalEffectTimers.clear();
+
+  const effects = Array.isArray(state?.globalEffects) ? state.globalEffects : [];
+
+  for (const effect of effects) {
+    if (effect.type === GLOBAL_EFFECTS.THE_WORLD && effect.expiresAt > Date.now()) {
+      scheduleGlobalEffectExpiration(effect);
+    }
+  }
+}
+
 
 function parseCommand(body) {
   const clean = String(body || "").trim();
