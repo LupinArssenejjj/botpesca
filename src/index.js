@@ -11,7 +11,11 @@ const COMMAND_PREFIX = process.env.COMMAND_PREFIX || "!";
 const ALLOWED_GROUP_ID = String(process.env.ALLOWED_GROUP_ID || "").trim();
 const HEADLESS = String(process.env.HEADLESS || "true") !== "false";
 
-const DATA_DIR = path.join(process.cwd(), "data");
+const ROOT_DIR = process.cwd();
+const DATA_DIR = path.join(ROOT_DIR, "data");
+const BACKUPS_DIR = path.join(ROOT_DIR, "backups");
+const BACKUPS_DATA_DIR = path.join(BACKUPS_DIR, "data");
+const BACKUPS_SRC_DIR = path.join(BACKUPS_DIR, "src");
 const DATA_FILE = path.join(DATA_DIR, "pesca.json");
 
 const BASE_MAX_BAITS = 5;
@@ -339,8 +343,64 @@ function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function ensureDir(dirPath) {
+  if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
+}
+
+function ensureProjectDirs() {
+  ensureDir(DATA_DIR);
+  ensureDir(BACKUPS_DIR);
+  ensureDir(BACKUPS_DATA_DIR);
+  ensureDir(BACKUPS_SRC_DIR);
+}
+
+function createBackupStamp() {
+  return new Date().toISOString().replace(/[:.]/g, "-");
+}
+
+function toProjectRelativePath(filePath) {
+  return path.relative(ROOT_DIR, filePath).split(path.sep).join("/");
+}
+
+function createDataBackup(prefix, sourcePath = DATA_FILE) {
+  ensureProjectDirs();
+
+  if (!fs.existsSync(sourcePath)) {
+    return null;
+  }
+
+  const backupPath = path.join(BACKUPS_DATA_DIR, `${prefix}-${createBackupStamp()}.json`);
+  fs.copyFileSync(sourcePath, backupPath);
+  return backupPath;
+}
+
+function pruneOldBackups(dirPath, prefix, keep = 25) {
+  ensureDir(dirPath);
+
+  const files = fs
+    .readdirSync(dirPath)
+    .filter((fileName) => fileName.startsWith(`${prefix}-`))
+    .map((fileName) => {
+      const fullPath = path.join(dirPath, fileName);
+      return {
+        fileName,
+        fullPath,
+        mtimeMs: fs.statSync(fullPath).mtimeMs
+      };
+    })
+    .sort((a, b) => b.mtimeMs - a.mtimeMs);
+
+  for (const file of files.slice(keep)) {
+    try {
+      fs.unlinkSync(file.fullPath);
+    } catch (error) {
+      log("Erro ao apagar backup antigo:", file.fullPath, error.message);
+    }
+  }
+}
+
 function ensureDataFile() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  ensureProjectDirs();
 
   if (!fs.existsSync(DATA_FILE)) {
     fs.writeFileSync(DATA_FILE, JSON.stringify(createEmptyState(), null, 2), "utf8");
@@ -9226,10 +9286,22 @@ async function adminRootListPlayersMessageV3(message) {
 async function adminRootBackupV3(message) {
   ensureDataFile();
 
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const backupPath = path.join(DATA_DIR, `pesca.admin-root-${stamp}.json`);
+  const backupPath = createDataBackup("pesca.admin-root");
 
-  fs.copyFileSync(DATA_FILE, backupPath);
+  if (!backupPath) {
+    await adminRootReplyV3(
+      message,
+      [
+        `⚠️ *Backup não criado*`,
+        ``,
+        `Arquivo principal não encontrado:`,
+        `> ${toProjectRelativePath(DATA_FILE)}`
+      ].join(adminRootNlV3())
+    );
+    return;
+  }
+
+  pruneOldBackups(BACKUPS_DATA_DIR, "pesca.admin-root", 25);
 
   await adminRootReplyV3(
     message,
@@ -9237,7 +9309,7 @@ async function adminRootBackupV3(message) {
       `💾 *Backup criado*`,
       ``,
       `Arquivo:`,
-      `> ${backupPath}`
+      `> ${toProjectRelativePath(backupPath)}`
     ].join(adminRootNlV3())
   );
 }
