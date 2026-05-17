@@ -5762,14 +5762,45 @@ function normalizeRokakakaAssetV2(asset) {
     "efeitos": "efeitos",
     "buff": "efeitos",
     "buffs": "efeitos",
-    "item": "rokakaka",
-    "itens": "efeitos"
+
+    "item": "listar-itens",
+    "itens": "listar-itens",
+    "inventario": "listar-itens",
+    "inventario do alvo": "listar-itens",
+    "lista": "listar-itens",
+    "listar": "listar-itens",
+
+    "cadaver": "cadaver",
+    "cadaver santo": "cadaver",
+    "parte": "cadaver",
+    "parte santa": "cadaver",
+    "partes": "cadaver",
+    "partes do cadaver": "cadaver",
+    "partes do cadaver santo": "cadaver"
   };
 
-  return aliases[clean] || clean;
+  if (aliases[clean]) {
+    return aliases[clean];
+  }
+
+  if (typeof normalizeHolyCorpsePartKey === "function" && typeof HOLY_CORPSE_PARTS !== "undefined") {
+    const partKey = normalizeHolyCorpsePartKey(clean);
+
+    if (HOLY_CORPSE_PARTS[partKey]) {
+      return `cadaver:${partKey}`;
+    }
+  }
+
+  return clean;
 }
 
 function getRokakakaAssetLabelV2(asset) {
+  if (isRokakakaHolyCorpseAssetV3(asset)) {
+    const partKey = getRokakakaHolyCorpsePartKeyV3(asset);
+    const part = typeof HOLY_CORPSE_PARTS !== "undefined" ? HOLY_CORPSE_PARTS[partKey] : null;
+    return part ? `parte do Cadáver: ${part.emoji} ${part.name}` : "parte do Cadáver Santo";
+  }
+
   if (asset === "pinto") return "pontos do !pinto";
   if (asset === "maior-peixe") return "maior peixe";
   if (asset === "stand") return "Stand";
@@ -5778,8 +5809,75 @@ function getRokakakaAssetLabelV2(asset) {
   if (asset === "disco-vazio") return "Disco de Stand vazio";
   if (asset === "disco-stand") return "Disco com Stand";
   if (asset === "efeitos") return "efeitos/buffs ativos";
+  if (asset === "cadaver") return "partes do Cadáver Santo";
+  if (asset === "listar-itens") return "lista de itens";
   return asset;
 }
+
+function isRokakakaHolyCorpseAssetV3(asset) {
+  return String(asset || "").startsWith("cadaver:");
+}
+
+function getRokakakaHolyCorpsePartKeyV3(asset) {
+  return String(asset || "").replace("cadaver:", "");
+}
+
+function getRokakakaHolyCorpsePartValueV3(partKey) {
+  const values = {
+    heart: 1050,
+    spine: 950,
+    left_arm: 900,
+    eye: 820,
+    skull: 780,
+    legs: 740,
+    rib_cage: 700
+  };
+
+  return Number(values[partKey] || 650);
+}
+
+function getRokakakaHolyCorpsePartAmountV3(player, partKey) {
+  if (typeof ensureHolyCorpseInventory === "function") {
+    ensureHolyCorpseInventory(player);
+  }
+
+  return Math.max(0, Number(player?.holyCorpse?.parts?.[partKey] || 0));
+}
+
+function getRokakakaHolyCorpseAssetKeysV3(player) {
+  if (typeof HOLY_CORPSE_PARTS === "undefined") {
+    return [];
+  }
+
+  if (typeof ensureHolyCorpseInventory === "function") {
+    ensureHolyCorpseInventory(player);
+  }
+
+  return Object.keys(HOLY_CORPSE_PARTS)
+    .filter((partKey) => getRokakakaHolyCorpsePartAmountV3(player, partKey) > 0)
+    .map((partKey) => `cadaver:${partKey}`);
+}
+
+function getRokakakaBaseAssetKeysV3() {
+  return [
+    "pinto",
+    "maior-peixe",
+    "stand",
+    "iscas",
+    "rokakaka",
+    "disco-vazio",
+    "disco-stand",
+    "efeitos"
+  ];
+}
+
+function getRokakakaAllAssetKeysV3(player) {
+  return [
+    ...getRokakakaBaseAssetKeysV3(),
+    ...getRokakakaHolyCorpseAssetKeysV3(player)
+  ];
+}
+
 
 function getRokakakaPintoScoreV2(state, player) {
   ensureMiniGamesState(state);
@@ -5815,6 +5913,19 @@ function getRokakakaStandDiscValueV2(player) {
 
 function getRokakakaAssetValueV2(state, player, asset, options = {}) {
   ensureRokakakaSpecialItemsV2(player);
+
+  if (isRokakakaHolyCorpseAssetV3(asset)) {
+    const partKey = getRokakakaHolyCorpsePartKeyV3(asset);
+    return getRokakakaHolyCorpsePartAmountV3(player, partKey) > 0
+      ? getRokakakaHolyCorpsePartValueV3(partKey)
+      : 0;
+  }
+
+  if (asset === "cadaver") {
+    return getRokakakaHolyCorpseAssetKeysV3(player).reduce((sum, partAsset) => {
+      return sum + getRokakakaAssetValueV2(state, player, partAsset, options);
+    }, 0);
+  }
 
   if (asset === "pinto") {
     return getRokakakaPintoScoreV2(state, player);
@@ -5857,18 +5968,7 @@ function getRokakakaAssetValueV2(state, player, asset, options = {}) {
 }
 
 function getRokakakaAvailableAssetsV2(state, actor, target, desiredAsset) {
-  const assets = [
-    "pinto",
-    "maior-peixe",
-    "stand",
-    "iscas",
-    "rokakaka",
-    "disco-vazio",
-    "disco-stand",
-    "efeitos"
-  ];
-
-  return assets
+  return getRokakakaAllAssetKeysV3(actor)
     .filter((asset) => {
       if (asset === "stand" && target.stand && desiredAsset !== "stand") {
         return false;
@@ -5882,6 +5982,71 @@ function getRokakakaAvailableAssetsV2(state, actor, target, desiredAsset) {
       value: getRokakakaAssetValueV2(state, actor, asset, { reserveRokakaka: 1 })
     }));
 }
+
+function getRokakakaTargetItemOptionsV3(state, target) {
+  return getRokakakaAllAssetKeysV3(target)
+    .map((asset) => ({
+      asset,
+      label: getRokakakaAssetLabelV2(asset),
+      value: getRokakakaAssetValueV2(state, target, asset)
+    }))
+    .filter((item) => item.value > 0);
+}
+
+function formatRokakakaTargetItemsV3(state, target) {
+  const items = getRokakakaTargetItemOptionsV3(state, target);
+
+  if (!items.length) {
+    return [
+      `🍈 *Rokakaka — itens de ${target.name}*`,
+      ``,
+      `Não encontrei itens trocáveis nesse jogador.`,
+      ``,
+      `Use:`,
+      `> !rokakaka <nome> itens`
+    ].join(rokakakaNlV2());
+  }
+
+  return [
+    `🍈 *Rokakaka — itens de ${target.name}*`,
+    ``,
+    `Escolha pelo número ou pelo nome do item:`,
+    ``,
+    ...items.map((item, index) => {
+      return `${index + 1}. *${item.label}* — valor ${item.value}`;
+    }),
+    ``,
+    `Como usar:`,
+    `> !rokakaka ${target.name} 1`,
+    `> !rokakaka ${target.name} stand`,
+    `> !rokakaka ${target.name} cadaver`,
+    ``,
+    `> A troca só acontece se existir uma compensação equivalente.`
+  ].join(rokakakaNlV2());
+}
+
+function parseRokakakaNumericChoiceV3(state, target, rawChoice) {
+  const clean = normalizeRokakakaTextV2(rawChoice);
+
+  if (!/^\d+$/.test(clean)) {
+    return null;
+  }
+
+  const index = Number(clean) - 1;
+  const items = getRokakakaTargetItemOptionsV3(state, target);
+
+  if (index < 0 || index >= items.length) {
+    return {
+      invalidChoice: true,
+      choiceNumber: Number(clean)
+    };
+  }
+
+  return {
+    desiredAsset: items[index].asset
+  };
+}
+
 
 function getRokakakaFairnessV2(giveValue, receiveValue) {
   const average = Math.max(1, (giveValue + receiveValue) / 2);
@@ -6028,30 +6193,54 @@ function parseRokakakaAutoCommandV2(state, actor, arg) {
     return null;
   }
 
-  const desiredAsset = normalizeRokakakaAssetV2(resolved.rest);
+  const rest = String(resolved.rest || "").trim();
+  const normalizedRest = normalizeRokakakaAssetV2(rest);
+
+  if (!rest || normalizedRest === "listar-itens" || normalizedRest === "cadaver") {
+    return {
+      forced,
+      simulate,
+      target: resolved.target,
+      listItems: true,
+      listMode: normalizedRest === "cadaver" ? "cadaver" : "all"
+    };
+  }
+
+  const numericChoice = parseRokakakaNumericChoiceV3(state, resolved.target, rest);
+
+  if (numericChoice?.invalidChoice) {
+    return {
+      forced,
+      simulate,
+      target: resolved.target,
+      invalidChoice: true,
+      choiceNumber: numericChoice.choiceNumber
+    };
+  }
 
   return {
     forced,
     simulate,
     target: resolved.target,
-    desiredAsset
+    desiredAsset: numericChoice?.desiredAsset || normalizedRest
   };
 }
 
 function getRokakakaAutoHelpV2() {
   return [
-    `🍈 *Rokakaka — Sistema Automático*`,
+    `🍈 *Rokakaka*`,
     ``,
-    `Agora você só diz *de quem* e *o que quer*.`,
-    `O bot escolhe automaticamente o que você dará em troca.`,
+    `Use a fruta para pedir um item de outro jogador.`,
+    `O bot calcula uma compensação equivalente com os seus próprios bens.`,
     ``,
     `Uso:`,
+    `• !rokakaka <nome> itens`,
+    `• !rokakaka <nome> <número>`,
     `• !rokakaka <nome> <item>`,
-    `• !rokakaka pegar <nome> <item>`,
-    `• !rokakaka forcar <nome> <item>`,
     `• !rokakaka simular <nome> <item>`,
+    `• !rokakaka forcar <nome> <item>`,
     ``,
-    `Itens que podem ser pedidos:`,
+    `Itens possíveis:`,
     `• pinto`,
     `• maior-peixe`,
     `• stand`,
@@ -6060,14 +6249,15 @@ function getRokakakaAutoHelpV2() {
     `• disco-vazio`,
     `• disco-stand`,
     `• efeitos`,
+    `• partes do cadáver`,
     ``,
     `Exemplos:`,
-    `> !rokakaka Alec stand`,
-    `> !rokakaka pegar João rokakaka`,
-    `> !rokakaka forcar Deyso disco-stand`,
-    `> !rokakaka simular Somelier De Butico maior-peixe`,
+    `> !rokakaka Alec itens`,
+    `> !rokakaka Alec 1`,
+    `> !rokakaka João stand`,
+    `> !rokaka Deyso cadaver`,
     ``,
-    `> A troca só acontece se o bot achar uma compensação equivalente.`
+    `> Use *itens* para ver a lista numerada do alvo.`
   ].join(rokakakaNlV2());
 }
 
@@ -6236,7 +6426,36 @@ function moveRokakakaEffectsV2(fromPlayer, toPlayer) {
   fromPlayer.effects = [];
 }
 
+
+function moveRokakakaHolyCorpsePartV3(fromPlayer, toPlayer, partKey) {
+  if (typeof ensureHolyCorpseInventory !== "function" || typeof HOLY_CORPSE_PARTS === "undefined") {
+    return;
+  }
+
+  const part = HOLY_CORPSE_PARTS[partKey];
+
+  if (!part) {
+    return;
+  }
+
+  ensureHolyCorpseInventory(fromPlayer);
+  ensureHolyCorpseInventory(toPlayer);
+
+  if (fromPlayer.holyCorpse.parts[partKey] <= 0) {
+    return;
+  }
+
+  fromPlayer.holyCorpse.parts[partKey] -= 1;
+  toPlayer.holyCorpse.parts[partKey] += 1;
+  toPlayer.holyCorpse.lastPartFoundAt = Date.now();
+}
+
 function applyRokakakaAssetMoveV2(state, fromPlayer, toPlayer, asset, snapshots) {
+  if (isRokakakaHolyCorpseAssetV3(asset)) {
+    moveRokakakaHolyCorpsePartV3(fromPlayer, toPlayer, getRokakakaHolyCorpsePartKeyV3(asset));
+    return;
+  }
+
   if (asset === "pinto") {
     moveRokakakaPintoV2(state, fromPlayer, toPlayer, snapshots);
     return;
@@ -6306,13 +6525,37 @@ async function handleRokakakaCommand(message, state, player, arg) {
     await replySafe(
       message,
       [
-        `🍈 *A Rokakaka mudou.*`,
+        `🍈 *Rokakaka*`,
         ``,
-        `Você não escolhe mais o que vai dar.`,
-        `Agora diga só o alvo e o que quer.`,
+        `Use apenas o nome do alvo e o item desejado.`,
         ``,
-        `Exemplo:`,
+        `Exemplos:`,
+        `> !rokakaka Alec itens`,
+        `> !rokakaka Alec 1`,
         `> !rokakaka Alec stand`
+      ].join(rokakakaNlV2())
+    );
+    return;
+  }
+
+  const target = parsed.target;
+  ensureRokakakaSpecialItemsV2(target);
+
+  if (parsed.listItems) {
+    await replySafe(message, formatRokakakaTargetItemsV3(state, target));
+    return;
+  }
+
+  if (parsed.invalidChoice) {
+    await replySafe(
+      message,
+      [
+        `🍈 *Opção inválida.*`,
+        ``,
+        `*${target.name}* não possui item na opção *${parsed.choiceNumber}*.`,
+        ``,
+        `Use:`,
+        `> !rokakaka ${target.name} itens`
       ].join(rokakakaNlV2())
     );
     return;
@@ -6322,9 +6565,6 @@ async function handleRokakakaCommand(message, state, player, arg) {
     await replySafe(message, `🍈 Você não tem Rokakaka.`);
     return;
   }
-
-  const target = parsed.target;
-  ensureRokakakaSpecialItemsV2(target);
 
   const desiredValue = getRokakakaAssetValueV2(state, target, parsed.desiredAsset);
 
@@ -6336,7 +6576,8 @@ async function handleRokakakaCommand(message, state, player, arg) {
         ``,
         `*${target.name}* não possui: *${getRokakakaAssetLabelV2(parsed.desiredAsset)}*.`,
         ``,
-        `Use *!rokakaka* para ver os itens possíveis.`
+        `Use a lista numerada:`,
+        `> !rokakaka ${target.name} itens`
       ].join(rokakakaNlV2())
     );
     return;
