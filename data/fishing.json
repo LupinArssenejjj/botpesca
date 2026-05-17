@@ -1,0 +1,42 @@
+{
+  "users": {
+    "191486905852031@lid": {
+      "id": "191486905852031@lid",
+      "name": "D.",
+      "balance": 20,
+      "totalCatches": 1,
+      "totalWeight": 2.17,
+      "totalValue": 20,
+      "lastFishAt": 1777754694455,
+      "bag": [
+        {
+          "name": "Traíra",
+          "emoji": "🐠",
+          "rarity": "incomum",
+          "weightKg": 2.17,
+          "value": 20,
+          "caughtAt": 1777754694455
+        }
+      ]
+    },
+    "46725066690779@lid": {
+      "id": "46725066690779@lid",
+      "name": "Ariel",
+      "balance": 90,
+      "totalCatches": 1,
+      "totalWeight": 5.38,
+      "totalValue": 90,
+      "lastFishAt": 1777754737262,
+      "bag": [
+        {
+          "name": "Dourado",
+          "emoji": "🐠",
+          "rarity": "épico",
+          "weightKg": 5.38,
+          "value": 90,
+          "caughtAt": 1777754737262
+        }
+      ]
+    }
+  }
+}

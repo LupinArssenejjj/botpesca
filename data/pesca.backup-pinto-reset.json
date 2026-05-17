@@ -1,0 +1,1180 @@
+{
+  "version": 8,
+  "groupId": "120363404479948222@g.us",
+  "players": {
+    "191486905852031@lid": {
+      "id": "191486905852031@lid",
+      "name": "D.",
+      "baits": 0,
+      "maxBaits": 5,
+      "lastBaitAt": 1777762467657,
+      "totalFish": 10,
+      "totalTrash": 1,
+      "totalLegendary": 0,
+      "totalWeight": 320.21,
+      "biggestCatch": {
+        "cid": "catch_1777761755668_6fgos6hx",
+        "kind": "fish",
+        "name": "Mero",
+        "emoji": "🐟",
+        "rarity": "épico",
+        "weightKg": 138.89,
+        "caughtAt": 1777761755668,
+        "spentBait": true,
+        "source": "normal"
+      },
+      "casts": 11,
+      "equipment": {
+        "bait_box": false,
+        "portable_pond": false,
+        "bait_pouch": false,
+        "fishing_pocket": false,
+        "fishing_pants": false,
+        "big_backpack": false
+      },
+      "effects": [],
+      "inventory": [
+        {
+          "cid": "catch_1777761755668_6fgos6hx",
+          "kind": "fish",
+          "name": "Mero",
+          "emoji": "🐟",
+          "rarity": "épico",
+          "weightKg": 138.89,
+          "caughtAt": 1777761755668,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777761796096_o5s2st34",
+          "kind": "fish",
+          "name": "Pirarucu",
+          "emoji": "🐋",
+          "rarity": "épico",
+          "weightKg": 70.22,
+          "caughtAt": 1777761796096,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777761792041_eq9zv7ah",
+          "kind": "fish",
+          "name": "Black Bass",
+          "emoji": "🐠",
+          "rarity": "incomum",
+          "weightKg": 38.06,
+          "caughtAt": 1777761792041,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777761787870_dzdfksoe",
+          "kind": "fish",
+          "name": "Piaba",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 23.44,
+          "caughtAt": 1777761787870,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777762219352_y0jp3409",
+          "kind": "fish",
+          "name": "Piaba",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 18.06,
+          "caughtAt": 1777762219352,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777759091001_oeldl6d9",
+          "kind": "fish",
+          "name": "Piaba",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 14.35,
+          "caughtAt": 1777759091001,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636780_sphdha81",
+          "kind": "fish",
+          "name": "Tilápia",
+          "emoji": "🐠",
+          "rarity": "comum",
+          "weightKg": 6.24,
+          "caughtAt": 1777755278805,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636780_wrm0gkai",
+          "kind": "fish",
+          "name": "Piau",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 4.76,
+          "caughtAt": 1777755282199,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636780_vjny6s7c",
+          "kind": "fish",
+          "name": "Tilápia",
+          "emoji": "🐠",
+          "rarity": "comum",
+          "weightKg": 3.64,
+          "caughtAt": 1777755273505,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636780_cmzn4uql",
+          "kind": "fish",
+          "name": "Curimbatá",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 2.55,
+          "caughtAt": 1777755267658,
+          "spentBait": false,
+          "source": "normal"
+        }
+      ],
+      "history": [
+        {
+          "cid": "catch_1777762471714_fs0c7hp7",
+          "kind": "trash",
+          "name": "Pneu furado",
+          "emoji": "🛞",
+          "rarity": "lixo",
+          "weightKg": 12.5,
+          "caughtAt": 1777762471714,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777762219352_y0jp3409",
+          "kind": "fish",
+          "name": "Piaba",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 18.06,
+          "caughtAt": 1777762219352,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777761796096_o5s2st34",
+          "kind": "fish",
+          "name": "Pirarucu",
+          "emoji": "🐋",
+          "rarity": "épico",
+          "weightKg": 70.22,
+          "caughtAt": 1777761796096,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777761792041_eq9zv7ah",
+          "kind": "fish",
+          "name": "Black Bass",
+          "emoji": "🐠",
+          "rarity": "incomum",
+          "weightKg": 38.06,
+          "caughtAt": 1777761792041,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777761787870_dzdfksoe",
+          "kind": "fish",
+          "name": "Piaba",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 23.44,
+          "caughtAt": 1777761787870,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777761755668_6fgos6hx",
+          "kind": "fish",
+          "name": "Mero",
+          "emoji": "🐟",
+          "rarity": "épico",
+          "weightKg": 138.89,
+          "caughtAt": 1777761755668,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777759091001_oeldl6d9",
+          "kind": "fish",
+          "name": "Piaba",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 14.35,
+          "caughtAt": 1777759091001,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636780_wrm0gkai",
+          "kind": "fish",
+          "name": "Piau",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 4.76,
+          "caughtAt": 1777755282199,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636780_sphdha81",
+          "kind": "fish",
+          "name": "Tilápia",
+          "emoji": "🐠",
+          "rarity": "comum",
+          "weightKg": 6.24,
+          "caughtAt": 1777755278805,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636780_vjny6s7c",
+          "kind": "fish",
+          "name": "Tilápia",
+          "emoji": "🐠",
+          "rarity": "comum",
+          "weightKg": 3.64,
+          "caughtAt": 1777755273505,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636780_cmzn4uql",
+          "kind": "fish",
+          "name": "Curimbatá",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 2.55,
+          "caughtAt": 1777755267658,
+          "spentBait": false,
+          "source": "normal"
+        }
+      ],
+      "stand": null,
+      "futureSight": [],
+      "standCooldownUntil": 0,
+      "activeStandBuff": null,
+      "synergies": {
+        "kcEpitaphReady": false,
+        "kcFutureVision": [],
+        "mandomClockUnlocked": false,
+        "mandomClockUses": 0
+      },
+      "heyYaMemory": {
+        "lastPhrase": "",
+        "phraseSeed": 0
+      }
+    },
+    "46725066690779@lid": {
+      "id": "46725066690779@lid",
+      "name": "Ariel",
+      "baits": 0,
+      "maxBaits": 5,
+      "lastBaitAt": 1777755332355,
+      "totalFish": 5,
+      "totalTrash": 0,
+      "totalLegendary": 0,
+      "totalWeight": 223.87,
+      "biggestCatch": {
+        "cid": "catch_1777758636781_1sa36cbx",
+        "kind": "fish",
+        "name": "Surubim-pintado",
+        "emoji": "🐟",
+        "rarity": "raro",
+        "weightKg": 93.99,
+        "caughtAt": 1777756305161,
+        "spentBait": false,
+        "source": "normal"
+      },
+      "casts": 5,
+      "equipment": {
+        "bait_box": false,
+        "portable_pond": false,
+        "bait_pouch": false,
+        "fishing_pocket": false,
+        "fishing_pants": false,
+        "big_backpack": false
+      },
+      "effects": [
+        {
+          "key": "titanium_hook",
+          "charges": 10
+        }
+      ],
+      "inventory": [
+        {
+          "cid": "catch_1777758636781_1sa36cbx",
+          "kind": "fish",
+          "name": "Surubim-pintado",
+          "emoji": "🐟",
+          "rarity": "raro",
+          "weightKg": 93.99,
+          "caughtAt": 1777756305161,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636780_9558ik0y",
+          "kind": "fish",
+          "name": "Cação-anjo",
+          "emoji": "🦈",
+          "rarity": "incomum",
+          "weightKg": 53.78,
+          "caughtAt": 1777756312527,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_8kc2zoz2",
+          "kind": "fish",
+          "name": "Abrotea",
+          "emoji": "🐟",
+          "rarity": "incomum",
+          "weightKg": 50.1,
+          "caughtAt": 1777756299855,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_w4707hxe",
+          "kind": "fish",
+          "name": "Cara-de-gato",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 24.14,
+          "caughtAt": 1777756294572,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_fqeb28yr",
+          "kind": "fish",
+          "name": "Lambari",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 1.86,
+          "caughtAt": 1777755332355,
+          "spentBait": false,
+          "source": "normal"
+        }
+      ],
+      "history": [
+        {
+          "cid": "catch_1777758636780_9558ik0y",
+          "kind": "fish",
+          "name": "Cação-anjo",
+          "emoji": "🦈",
+          "rarity": "incomum",
+          "weightKg": 53.78,
+          "caughtAt": 1777756312527,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_1sa36cbx",
+          "kind": "fish",
+          "name": "Surubim-pintado",
+          "emoji": "🐟",
+          "rarity": "raro",
+          "weightKg": 93.99,
+          "caughtAt": 1777756305161,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_8kc2zoz2",
+          "kind": "fish",
+          "name": "Abrotea",
+          "emoji": "🐟",
+          "rarity": "incomum",
+          "weightKg": 50.1,
+          "caughtAt": 1777756299855,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_w4707hxe",
+          "kind": "fish",
+          "name": "Cara-de-gato",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 24.14,
+          "caughtAt": 1777756294572,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_fqeb28yr",
+          "kind": "fish",
+          "name": "Lambari",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 1.86,
+          "caughtAt": 1777755332355,
+          "spentBait": false,
+          "source": "normal"
+        }
+      ],
+      "stand": null,
+      "futureSight": [],
+      "standCooldownUntil": 0,
+      "activeStandBuff": null,
+      "synergies": {
+        "kcEpitaphReady": false,
+        "kcFutureVision": [],
+        "mandomClockUnlocked": false,
+        "mandomClockUses": 0
+      },
+      "heyYaMemory": {
+        "lastPhrase": "",
+        "phraseSeed": 0
+      }
+    },
+    "2010682265787@lid": {
+      "id": "2010682265787@lid",
+      "name": "Nicoli",
+      "baits": 0,
+      "lastBaitAt": 1777759542495,
+      "casts": 6,
+      "totalFish": 5,
+      "totalTrash": 1,
+      "totalLegendary": 0,
+      "totalWeight": 176.6,
+      "biggestCatch": {
+        "cid": "catch_1777758636781_aimaok4w",
+        "kind": "fish",
+        "name": "Mula",
+        "emoji": "🐠",
+        "rarity": "comum",
+        "weightKg": 56.89,
+        "caughtAt": 1777755942495,
+        "spentBait": false,
+        "source": "normal"
+      },
+      "inventory": [
+        {
+          "cid": "catch_1777758636781_aimaok4w",
+          "kind": "fish",
+          "name": "Mula",
+          "emoji": "🐠",
+          "rarity": "comum",
+          "weightKg": 56.89,
+          "caughtAt": 1777755942495,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_ffbi3tl4",
+          "kind": "fish",
+          "name": "Xaréu-branco",
+          "emoji": "🐟",
+          "rarity": "raro",
+          "weightKg": 40.08,
+          "caughtAt": 1777755965034,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_kh7ojtoa",
+          "kind": "fish",
+          "name": "Atum",
+          "emoji": "🐟",
+          "rarity": "épico",
+          "weightKg": 33.79,
+          "caughtAt": 1777755949908,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_xbe88swu",
+          "kind": "fish",
+          "name": "Surubim-pintado",
+          "emoji": "🐟",
+          "rarity": "raro",
+          "weightKg": 29.13,
+          "caughtAt": 1777755954324,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_rp452e89",
+          "kind": "fish",
+          "name": "Piaba",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 16.71,
+          "caughtAt": 1777755959893,
+          "spentBait": false,
+          "source": "normal"
+        }
+      ],
+      "history": [
+        {
+          "cid": "catch_1777759972149_q6ymekwk",
+          "kind": "trash",
+          "name": "Pacote da Shopee",
+          "emoji": "📦",
+          "rarity": "lixo",
+          "weightKg": 5.04,
+          "caughtAt": 1777759972149,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_ffbi3tl4",
+          "kind": "fish",
+          "name": "Xaréu-branco",
+          "emoji": "🐟",
+          "rarity": "raro",
+          "weightKg": 40.08,
+          "caughtAt": 1777755965034,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_rp452e89",
+          "kind": "fish",
+          "name": "Piaba",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 16.71,
+          "caughtAt": 1777755959893,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_xbe88swu",
+          "kind": "fish",
+          "name": "Surubim-pintado",
+          "emoji": "🐟",
+          "rarity": "raro",
+          "weightKg": 29.13,
+          "caughtAt": 1777755954324,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_kh7ojtoa",
+          "kind": "fish",
+          "name": "Atum",
+          "emoji": "🐟",
+          "rarity": "épico",
+          "weightKg": 33.79,
+          "caughtAt": 1777755949908,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_aimaok4w",
+          "kind": "fish",
+          "name": "Mula",
+          "emoji": "🐠",
+          "rarity": "comum",
+          "weightKg": 56.89,
+          "caughtAt": 1777755942495,
+          "spentBait": false,
+          "source": "normal"
+        }
+      ],
+      "equipment": {
+        "bait_box": false,
+        "portable_pond": true,
+        "bait_pouch": false,
+        "fishing_pocket": false,
+        "fishing_pants": false,
+        "big_backpack": false
+      },
+      "effects": [],
+      "stand": null,
+      "futureSight": [],
+      "standCooldownUntil": 0,
+      "activeStandBuff": null,
+      "synergies": {
+        "kcEpitaphReady": false,
+        "kcFutureVision": [],
+        "mandomClockUnlocked": false,
+        "mandomClockUses": 0
+      },
+      "heyYaMemory": {
+        "lastPhrase": "",
+        "phraseSeed": 0
+      }
+    },
+    "30928562827444@lid": {
+      "id": "30928562827444@lid",
+      "name": "Leo",
+      "baits": 0,
+      "lastBaitAt": 1777755963197,
+      "casts": 5,
+      "totalFish": 5,
+      "totalTrash": 0,
+      "totalLegendary": 0,
+      "totalWeight": 186.97,
+      "biggestCatch": {
+        "cid": "catch_1777758636781_zjhsck4i",
+        "kind": "fish",
+        "name": "Peixe-agulha",
+        "emoji": "🐟",
+        "rarity": "comum",
+        "weightKg": 54.23,
+        "caughtAt": 1777755983519,
+        "spentBait": false,
+        "source": "normal"
+      },
+      "inventory": [
+        {
+          "cid": "catch_1777758636781_zjhsck4i",
+          "kind": "fish",
+          "name": "Peixe-agulha",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 54.23,
+          "caughtAt": 1777755983519,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_da1anv3t",
+          "kind": "fish",
+          "name": "Mula",
+          "emoji": "🐠",
+          "rarity": "comum",
+          "weightKg": 48.22,
+          "caughtAt": 1777756013498,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_ggahawc3",
+          "kind": "fish",
+          "name": "Mula",
+          "emoji": "🐠",
+          "rarity": "comum",
+          "weightKg": 40.55,
+          "caughtAt": 1777755963197,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_qtzbj9l5",
+          "kind": "fish",
+          "name": "Piaba",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 27.86,
+          "caughtAt": 1777756006682,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_4ybuf65v",
+          "kind": "fish",
+          "name": "Piaba",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 16.11,
+          "caughtAt": 1777755997596,
+          "spentBait": false,
+          "source": "normal"
+        }
+      ],
+      "history": [
+        {
+          "cid": "catch_1777758636781_da1anv3t",
+          "kind": "fish",
+          "name": "Mula",
+          "emoji": "🐠",
+          "rarity": "comum",
+          "weightKg": 48.22,
+          "caughtAt": 1777756013498,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_qtzbj9l5",
+          "kind": "fish",
+          "name": "Piaba",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 27.86,
+          "caughtAt": 1777756006682,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_4ybuf65v",
+          "kind": "fish",
+          "name": "Piaba",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 16.11,
+          "caughtAt": 1777755997596,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_zjhsck4i",
+          "kind": "fish",
+          "name": "Peixe-agulha",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 54.23,
+          "caughtAt": 1777755983519,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_ggahawc3",
+          "kind": "fish",
+          "name": "Mula",
+          "emoji": "🐠",
+          "rarity": "comum",
+          "weightKg": 40.55,
+          "caughtAt": 1777755963197,
+          "spentBait": false,
+          "source": "normal"
+        }
+      ],
+      "equipment": {
+        "bait_box": false,
+        "portable_pond": false,
+        "bait_pouch": false,
+        "fishing_pocket": false,
+        "fishing_pants": false,
+        "big_backpack": false
+      },
+      "effects": [],
+      "stand": null,
+      "standCooldownUntil": 0,
+      "activeStandBuff": null,
+      "futureSight": [],
+      "synergies": {
+        "kcEpitaphReady": false,
+        "kcFutureVision": [],
+        "mandomClockUnlocked": false,
+        "mandomClockUses": 0
+      },
+      "heyYaMemory": {
+        "lastPhrase": "",
+        "phraseSeed": 0
+      }
+    },
+    "127753919705113@lid": {
+      "id": "127753919705113@lid",
+      "name": "J",
+      "baits": 0,
+      "lastBaitAt": 1777757763291,
+      "casts": 5,
+      "totalFish": 5,
+      "totalTrash": 0,
+      "totalLegendary": 0,
+      "totalWeight": 277.05,
+      "biggestCatch": {
+        "cid": "catch_1777758670813_eod96b1x",
+        "kind": "fish",
+        "name": "Bagre-sapo",
+        "emoji": "🐟",
+        "rarity": "incomum",
+        "weightKg": 81.18,
+        "caughtAt": 1777758670813,
+        "spentBait": true,
+        "source": "normal"
+      },
+      "inventory": [
+        {
+          "cid": "catch_1777758670813_eod96b1x",
+          "kind": "fish",
+          "name": "Bagre-sapo",
+          "emoji": "🐟",
+          "rarity": "incomum",
+          "weightKg": 81.18,
+          "caughtAt": 1777758670813,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758641394_7uwfo3he",
+          "kind": "fish",
+          "name": "Cavala-wahoo",
+          "emoji": "🐟",
+          "rarity": "incomum",
+          "weightKg": 75.94,
+          "caughtAt": 1777758641394,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758651345_bznnlypk",
+          "kind": "fish",
+          "name": "Baiacu-pinha",
+          "emoji": "🐡",
+          "rarity": "incomum",
+          "weightKg": 63.29,
+          "caughtAt": 1777758651345,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_hbxpeym5",
+          "kind": "fish",
+          "name": "Piranha-vermelha",
+          "emoji": "🐟",
+          "rarity": "raro",
+          "weightKg": 37.12,
+          "caughtAt": 1777757763292,
+          "spentBait": false,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758657382_42j81vp3",
+          "kind": "fish",
+          "name": "Sardinha",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 19.52,
+          "caughtAt": 1777758657382,
+          "spentBait": true,
+          "source": "normal"
+        }
+      ],
+      "history": [
+        {
+          "cid": "catch_1777758670813_eod96b1x",
+          "kind": "fish",
+          "name": "Bagre-sapo",
+          "emoji": "🐟",
+          "rarity": "incomum",
+          "weightKg": 81.18,
+          "caughtAt": 1777758670813,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758657382_42j81vp3",
+          "kind": "fish",
+          "name": "Sardinha",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 19.52,
+          "caughtAt": 1777758657382,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758651345_bznnlypk",
+          "kind": "fish",
+          "name": "Baiacu-pinha",
+          "emoji": "🐡",
+          "rarity": "incomum",
+          "weightKg": 63.29,
+          "caughtAt": 1777758651345,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758641394_7uwfo3he",
+          "kind": "fish",
+          "name": "Cavala-wahoo",
+          "emoji": "🐟",
+          "rarity": "incomum",
+          "weightKg": 75.94,
+          "caughtAt": 1777758641394,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636781_hbxpeym5",
+          "kind": "fish",
+          "name": "Piranha-vermelha",
+          "emoji": "🐟",
+          "rarity": "raro",
+          "weightKg": 37.12,
+          "caughtAt": 1777757763292,
+          "spentBait": false,
+          "source": "normal"
+        }
+      ],
+      "equipment": {
+        "bait_box": false,
+        "portable_pond": false,
+        "bait_pouch": false,
+        "fishing_pocket": false,
+        "fishing_pants": false,
+        "big_backpack": false
+      },
+      "effects": [],
+      "stand": null,
+      "futureSight": [],
+      "standCooldownUntil": 0,
+      "activeStandBuff": null,
+      "synergies": {
+        "kcEpitaphReady": false,
+        "kcFutureVision": [],
+        "mandomClockUnlocked": false,
+        "mandomClockUses": 0
+      },
+      "heyYaMemory": {
+        "lastPhrase": "",
+        "phraseSeed": 0
+      }
+    },
+    "261396608614567@lid": {
+      "id": "261396608614567@lid",
+      "name": "oliveira☕️",
+      "baits": 0,
+      "lastBaitAt": 1777758636777,
+      "history": [
+        {
+          "cid": "catch_1777758652287_xrrte4tg",
+          "kind": "fish",
+          "name": "Bagre-branco",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 38.47,
+          "caughtAt": 1777758652287,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758650496_sl3c8wpx",
+          "kind": "fish",
+          "name": "Mero",
+          "emoji": "🐟",
+          "rarity": "épico",
+          "weightKg": 120.34,
+          "caughtAt": 1777758650496,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758648879_1b9s4260",
+          "kind": "fish",
+          "name": "Sardinha",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 10.76,
+          "caughtAt": 1777758648879,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758646795_74yti5y5",
+          "kind": "fish",
+          "name": "Xaréu-branco",
+          "emoji": "🐟",
+          "rarity": "raro",
+          "weightKg": 61.08,
+          "caughtAt": 1777758646795,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636780_2r8ac35e",
+          "kind": "fish",
+          "name": "Ronçador",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 28.52,
+          "caughtAt": 1777758636780,
+          "spentBait": true,
+          "source": "normal"
+        }
+      ],
+      "equipment": {
+        "bait_box": false,
+        "portable_pond": false,
+        "bait_pouch": false,
+        "fishing_pocket": false,
+        "fishing_pants": false,
+        "big_backpack": false
+      },
+      "effects": [],
+      "stand": null,
+      "standCooldownUntil": 0,
+      "activeStandBuff": null,
+      "futureSight": [],
+      "casts": 5,
+      "totalFish": 5,
+      "totalTrash": 0,
+      "totalLegendary": 0,
+      "totalWeight": 259.17,
+      "biggestCatch": {
+        "cid": "catch_1777758650496_sl3c8wpx",
+        "kind": "fish",
+        "name": "Mero",
+        "emoji": "🐟",
+        "rarity": "épico",
+        "weightKg": 120.34,
+        "caughtAt": 1777758650496,
+        "spentBait": true,
+        "source": "normal"
+      },
+      "inventory": [
+        {
+          "cid": "catch_1777758650496_sl3c8wpx",
+          "kind": "fish",
+          "name": "Mero",
+          "emoji": "🐟",
+          "rarity": "épico",
+          "weightKg": 120.34,
+          "caughtAt": 1777758650496,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758646795_74yti5y5",
+          "kind": "fish",
+          "name": "Xaréu-branco",
+          "emoji": "🐟",
+          "rarity": "raro",
+          "weightKg": 61.08,
+          "caughtAt": 1777758646795,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758652287_xrrte4tg",
+          "kind": "fish",
+          "name": "Bagre-branco",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 38.47,
+          "caughtAt": 1777758652287,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758636780_2r8ac35e",
+          "kind": "fish",
+          "name": "Ronçador",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 28.52,
+          "caughtAt": 1777758636780,
+          "spentBait": true,
+          "source": "normal"
+        },
+        {
+          "cid": "catch_1777758648879_1b9s4260",
+          "kind": "fish",
+          "name": "Sardinha",
+          "emoji": "🐟",
+          "rarity": "comum",
+          "weightKg": 10.76,
+          "caughtAt": 1777758648879,
+          "spentBait": true,
+          "source": "normal"
+        }
+      ],
+      "synergies": {
+        "kcEpitaphReady": false,
+        "kcFutureVision": [],
+        "mandomClockUnlocked": false,
+        "mandomClockUses": 0
+      },
+      "heyYaMemory": {
+        "lastPhrase": "",
+        "phraseSeed": 0
+      }
+    }
+  },
+  "legendaryLog": [],
+  "groupStats": {
+    "totalFish": 35,
+    "totalTrash": 2,
+    "totalLegendary": 0,
+    "totalBaitsUsed": 17
+  },
+  "globalEffects": [],
+  "miniGames": {
+    "pinto": {
+      "players": {
+        "191486905852031@lid": {
+          "id": "191486905852031@lid",
+          "name": "D.",
+          "lastPlayedAt": 1777759562274,
+          "flaccidCm": 3.16,
+          "erectCm": 22.17,
+          "girthCm": 18.15,
+          "score": 490,
+          "lastResultAt": 1777759562274
+        },
+        "2010682265787@lid": {
+          "id": "2010682265787@lid",
+          "name": "Nicoli",
+          "lastPlayedAt": 1777759982937,
+          "flaccidCm": 9.15,
+          "erectCm": 19.11,
+          "girthCm": 8.29,
+          "score": 377,
+          "lastResultAt": 1777759982937
+        },
+        "30928562827444@lid": {
+          "id": "30928562827444@lid",
+          "name": "Leo",
+          "lastPlayedAt": 1777760023699,
+          "flaccidCm": 13.43,
+          "erectCm": 24.79,
+          "girthCm": 14.45,
+          "score": 528,
+          "lastResultAt": 1777760023699
+        },
+        "46725066690779@lid": {
+          "id": "46725066690779@lid",
+          "name": "Ariel",
+          "lastPlayedAt": 1777761003416,
+          "flaccidCm": 14.05,
+          "erectCm": 19.09,
+          "girthCm": 17.82,
+          "score": 490,
+          "lastResultAt": 1777761003416
+        },
+        "261396608614567@lid": {
+          "id": "261396608614567@lid",
+          "name": "oliveira☕️",
+          "lastPlayedAt": 1777761076666,
+          "flaccidCm": 6.69,
+          "erectCm": 16.69,
+          "girthCm": 9.24,
+          "score": 338,
+          "lastResultAt": 1777761076666
+        },
+        "127753919705113@lid": {
+          "id": "127753919705113@lid",
+          "name": "J",
+          "lastPlayedAt": 1777762484384,
+          "flaccidCm": 11.8,
+          "erectCm": 8.73,
+          "girthCm": 14.91,
+          "score": 313,
+          "lastResultAt": 1777762484384
+        }
+      }
+    }
+  },
+  "groupHeyYa": {
+    "enabled": true,
+    "lastPhrase": "🗣️ Hey Ya! do Grupo: \"Escutem só... D. começou a pescar; esse arremesso pode virar história. é daqui que sai o impossível.\"",
+    "recentPhrases": [
+      "🗣️ Hey Ya! do Grupo: \"Escutem só... D. começou a pescar; esse arremesso pode virar história. é daqui que sai o impossível.\""
+    ]
+  }
+}
