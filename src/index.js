@@ -8,7 +8,11 @@ const { Client, LocalAuth } = require("whatsapp-web.js");
 
 const BOT_NAME = process.env.BOT_NAME || "Bot da Pescaria";
 const COMMAND_PREFIX = process.env.COMMAND_PREFIX || "!";
-const ALLOWED_GROUP_ID = String(process.env.ALLOWED_GROUP_ID || "").trim();
+const ALLOWED_GROUP_IDS = String(process.env.ALLOWED_GROUP_IDS || process.env.ALLOWED_GROUP_ID || "")
+  .split(",")
+  .map((groupId) => groupId.trim())
+  .filter(Boolean);
+const ALLOWED_GROUP_ID = ALLOWED_GROUP_IDS[0] || "";
 const HEADLESS = String(process.env.HEADLESS || "true") !== "false";
 
 const ROOT_DIR = process.cwd();
@@ -17,6 +21,138 @@ const BACKUPS_DIR = path.join(ROOT_DIR, "backups");
 const BACKUPS_DATA_DIR = path.join(BACKUPS_DIR, "data");
 const BACKUPS_SRC_DIR = path.join(BACKUPS_DIR, "src");
 const DATA_FILE = path.join(DATA_DIR, "pesca.json");
+const GROUPS_DATA_DIR = path.join(DATA_DIR, "groups");
+const BACKUPS_GROUPS_DATA_DIR = path.join(BACKUPS_DATA_DIR, "groups");
+
+const GROUP_CONTEXT_META = Symbol("groupContext");
+let currentGroupContextId = "";
+
+function normalizeGroupId(groupId) {
+  return String(groupId || "").trim();
+}
+
+function getRuntimeGroupIds() {
+  return ALLOWED_GROUP_IDS.slice();
+}
+
+function getDefaultGroupId() {
+  return ALLOWED_GROUP_ID || "";
+}
+
+function getCurrentGroupId(fallback = "") {
+  return normalizeGroupId(currentGroupContextId || fallback || getDefaultGroupId());
+}
+
+function isGroupAllowed(groupId) {
+  const normalized = normalizeGroupId(groupId);
+  return Boolean(normalized && ALLOWED_GROUP_IDS.includes(normalized));
+}
+
+async function withGroupContext(groupId, action) {
+  const previousGroupId = currentGroupContextId;
+  currentGroupContextId = normalizeGroupId(groupId);
+
+  try {
+    return await action();
+  } finally {
+    currentGroupContextId = previousGroupId;
+  }
+}
+
+function sanitizeGroupIdForPath(groupId) {
+  const normalized = normalizeGroupId(groupId);
+  return normalized.replace(/[^a-zA-Z0-9@._-]/g, "_") || "default";
+}
+
+function getGroupDataDir(groupId = getCurrentGroupId()) {
+  const normalized = normalizeGroupId(groupId);
+
+  if (!normalized) {
+    return DATA_DIR;
+  }
+
+  return path.join(GROUPS_DATA_DIR, sanitizeGroupIdForPath(normalized));
+}
+
+function getGroupDataFile(groupId = getCurrentGroupId()) {
+  return path.join(getGroupDataDir(groupId), "pesca.json");
+}
+
+function getGroupMandomTimelineFile(groupId = getCurrentGroupId()) {
+  return path.join(getGroupDataDir(groupId), "mandom_clean_timeline.json");
+}
+
+function getGroupBackupsDataDir(groupId = getCurrentGroupId()) {
+  const normalized = normalizeGroupId(groupId);
+
+  if (!normalized) {
+    return BACKUPS_DATA_DIR;
+  }
+
+  return path.join(BACKUPS_GROUPS_DATA_DIR, sanitizeGroupIdForPath(normalized));
+}
+
+function attachGroupContextToState(state, groupId = getCurrentGroupId()) {
+  if (!state || typeof state !== "object") {
+    return state;
+  }
+
+  const normalized = normalizeGroupId(groupId);
+  state.groupId = normalized || state.groupId || null;
+
+  Object.defineProperty(state, GROUP_CONTEXT_META, {
+    value: {
+      groupId: normalized,
+      dataDir: getGroupDataDir(normalized),
+      dataFile: getGroupDataFile(normalized),
+      mandomTimelineFile: getGroupMandomTimelineFile(normalized),
+      backupsDataDir: getGroupBackupsDataDir(normalized)
+    },
+    enumerable: false,
+    configurable: true,
+    writable: true
+  });
+
+  return state;
+}
+
+function getStateGroupId(state) {
+  return normalizeGroupId(
+    state?.[GROUP_CONTEXT_META]?.groupId ||
+      state?.groupId ||
+      getCurrentGroupId()
+  );
+}
+
+function getStateDataFile(state) {
+  return state?.[GROUP_CONTEXT_META]?.dataFile || getGroupDataFile(getStateGroupId(state));
+}
+
+function getStateDataDir(state) {
+  return state?.[GROUP_CONTEXT_META]?.dataDir || getGroupDataDir(getStateGroupId(state));
+}
+
+function getStateBackupsDataDir(state) {
+  return state?.[GROUP_CONTEXT_META]?.backupsDataDir || getGroupBackupsDataDir(getStateGroupId(state));
+}
+
+function getStateMandomTimelineFile(state) {
+  return state?.[GROUP_CONTEXT_META]?.mandomTimelineFile || getGroupMandomTimelineFile(getStateGroupId(state));
+}
+
+const nativeSetTimeout = global.setTimeout.bind(global);
+
+global.setTimeout = function groupAwareSetTimeout(callback, delay, ...args) {
+  const capturedGroupId = currentGroupContextId;
+
+  if (!capturedGroupId || typeof callback !== "function") {
+    return nativeSetTimeout(callback, delay, ...args);
+  }
+
+  return nativeSetTimeout((...callbackArgs) => {
+    return withGroupContext(capturedGroupId, () => callback(...callbackArgs));
+  }, delay, ...args);
+};
 
 const BASE_MAX_BAITS = 5;
 const BASE_INVENTORY_LIMIT = 10;
@@ -347,11 +483,20 @@ function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
 }
 
-function ensureProjectDirs() {
+function ensureProjectDirs(groupId = getCurrentGroupId()) {
   ensureDir(DATA_DIR);
   ensureDir(BACKUPS_DIR);
   ensureDir(BACKUPS_DATA_DIR);
   ensureDir(BACKUPS_SRC_DIR);
+  ensureDir(GROUPS_DATA_DIR);
+  ensureDir(BACKUPS_GROUPS_DATA_DIR);
+
+  const normalizedGroupId = normalizeGroupId(groupId);
+
+  if (normalizedGroupId) {
+    ensureDir(getGroupDataDir(normalizedGroupId));
+    ensureDir(getGroupBackupsDataDir(normalizedGroupId));
+  }
 }
 
 function createBackupStamp() {
@@ -362,15 +507,19 @@ function toProjectRelativePath(filePath) {
   return path.relative(ROOT_DIR, filePath).split(path.sep).join("/");
 }
 
-function createDataBackup(prefix, sourcePath = DATA_FILE) {
-  ensureProjectDirs();
+function createDataBackup(prefix, sourcePath = null, groupId = getCurrentGroupId()) {
+  const normalizedGroupId = normalizeGroupId(groupId);
+  const resolvedSourcePath = sourcePath || getGroupDataFile(normalizedGroupId);
+  const backupDir = getGroupBackupsDataDir(normalizedGroupId);
 
-  if (!fs.existsSync(sourcePath)) {
+  ensureProjectDirs(normalizedGroupId);
+
+  if (!fs.existsSync(resolvedSourcePath)) {
     return null;
   }
 
-  const backupPath = path.join(BACKUPS_DATA_DIR, `${prefix}-${createBackupStamp()}.json`);
-  fs.copyFileSync(sourcePath, backupPath);
+  const backupPath = path.join(backupDir, `${prefix}-${createBackupStamp()}.json`);
+  fs.copyFileSync(resolvedSourcePath, backupPath);
   return backupPath;
 }
 
@@ -399,18 +548,50 @@ function pruneOldBackups(dirPath, prefix, keep = 25) {
   }
 }
 
-function ensureDataFile() {
-  ensureProjectDirs();
+function readLegacyStateForFirstGroup(groupId) {
+  const normalizedGroupId = normalizeGroupId(groupId);
+
+  if (!normalizedGroupId || normalizedGroupId !== getDefaultGroupId()) {
+    return null;
+  }
 
   if (!fs.existsSync(DATA_FILE)) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(createEmptyState(), null, 2), "utf8");
+    return null;
+  }
+
+  try {
+    const raw = fs.readFileSync(DATA_FILE, "utf8");
+    const parsed = JSON.parse(raw);
+
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+
+    parsed.groupId = normalizedGroupId;
+    return parsed;
+  } catch (error) {
+    log("Erro ao migrar data/pesca.json para o primeiro grupo:", error.message);
+    return null;
   }
 }
 
-function createEmptyState() {
+function ensureDataFile(groupId = getCurrentGroupId()) {
+  const normalizedGroupId = normalizeGroupId(groupId);
+  const dataFile = getGroupDataFile(normalizedGroupId);
+
+  ensureProjectDirs(normalizedGroupId);
+
+  if (!fs.existsSync(dataFile)) {
+    const legacyState = readLegacyStateForFirstGroup(normalizedGroupId);
+    const initialState = legacyState || createEmptyState(normalizedGroupId);
+    fs.writeFileSync(dataFile, JSON.stringify(initialState, null, 2), "utf8");
+  }
+}
+
+function createEmptyState(groupId = getCurrentGroupId()) {
   return {
     version: 8,
-    groupId: ALLOWED_GROUP_ID || null,
+    groupId: normalizeGroupId(groupId) || null,
     players: {},
     groupStats: {
       totalFish: 0,
@@ -433,47 +614,56 @@ function createEmptyState() {
   };
 }
 
-function loadState() {
-  ensureDataFile();
+function loadState(groupId = getCurrentGroupId()) {
+  const normalizedGroupId = normalizeGroupId(groupId);
+
+  ensureDataFile(normalizedGroupId);
 
   try {
-    const raw = fs.readFileSync(DATA_FILE, "utf8");
+    const dataFile = getGroupDataFile(normalizedGroupId);
+    const raw = fs.readFileSync(dataFile, "utf8");
     const parsed = JSON.parse(raw);
 
-    if (!parsed || typeof parsed !== "object") return createEmptyState();
+    if (!parsed || typeof parsed !== "object") {
+      return attachGroupContextToState(createEmptyState(normalizedGroupId), normalizedGroupId);
+    }
+
     if (!parsed.players || typeof parsed.players !== "object") parsed.players = {};
-    if (!parsed.groupStats || typeof parsed.groupStats !== "object") parsed.groupStats = createEmptyState().groupStats;
+    if (!parsed.groupStats || typeof parsed.groupStats !== "object") parsed.groupStats = createEmptyState(normalizedGroupId).groupStats;
     if (!Array.isArray(parsed.legendaryLog)) parsed.legendaryLog = [];
     if (!Array.isArray(parsed.globalEffects)) parsed.globalEffects = [];
+
+    parsed.groupId = normalizedGroupId || parsed.groupId || null;
+
     ensureMiniGamesState(parsed);
     ensureGroupHeyYaState(parsed);
 
     parsed.version = 8;
-    return parsed;
+    return attachGroupContextToState(parsed, normalizedGroupId);
   } catch (error) {
     log("Erro ao ler pesca.json:", error.message);
-    return createEmptyState();
+    return attachGroupContextToState(createEmptyState(normalizedGroupId), normalizedGroupId);
   }
 }
 
-
-
-
-
-
-
 function saveState(state) {
+  const groupId = getStateGroupId(state);
+
+  attachGroupContextToState(state, groupId);
   ensureMiniGamesState(state);
-  ensureDataFile();
+  ensureDataFile(groupId);
+
   if (typeof captureMandomCoreSnapshotBeforeSaveV2 === "function") {
-    captureMandomCoreSnapshotBeforeSaveV2();
+    captureMandomCoreSnapshotBeforeSaveV2(state);
   }
 
   if (typeof captureMandomCleanSnapshotBeforeSaveV1 === "function") {
-    captureMandomCleanSnapshotBeforeSaveV1();
+    captureMandomCleanSnapshotBeforeSaveV1(state);
   }
 
-fs.writeFileSync(DATA_FILE, JSON.stringify(state, null, 2), "utf8");
+  state.groupId = groupId || state.groupId || null;
+
+  fs.writeFileSync(getStateDataFile(state), JSON.stringify(state, null, 2), "utf8");
 }
 
 
@@ -3103,68 +3293,72 @@ async function startHeyYaPassiveLoopV3() {
   log("Hey Ya ajustado: só atua durante sequência de pesca e desliga após 10s sem !pescar.");
 
   setInterval(async () => {
-    try {
-      const state = loadState();
-      normalizeAllPlayers(state);
+    for (const groupId of getRuntimeGroupIds()) {
+      try {
+        await withGroupContext(groupId, async () => {
+          const state = loadState(groupId);
+          normalizeAllPlayers(state);
 
-      const now = Date.now();
-      const lines = [];
-      let changed = false;
+          const now = Date.now();
+          const lines = [];
+          let changed = false;
 
-      for (const player of Object.values(state.players || {})) {
-        if (player.stand?.key !== "hey_ya") {
-          continue;
-        }
+          for (const player of Object.values(state.players || {})) {
+            if (player.stand?.key !== "hey_ya") {
+              continue;
+            }
 
-        ensureHeyYaAutoStateV3(player);
-        ensureHeyYaFishingWindowV2(player);
+            ensureHeyYaAutoStateV3(player);
+            ensureHeyYaFishingWindowV2(player);
 
-        const activeUntil = Number(player.heyYaFishingWindow.activeUntil || 0);
+            const activeUntil = Number(player.heyYaFishingWindow.activeUntil || 0);
 
-        if (activeUntil <= now) {
-          if (player.heyYaFishingWindow.active) {
-            player.heyYaFishingWindow.active = false;
-            changed = true;
+            if (activeUntil <= now) {
+              if (player.heyYaFishingWindow.active) {
+                player.heyYaFishingWindow.active = false;
+                changed = true;
+              }
+
+              continue;
+            }
+
+            player.heyYaFishingWindow.active = true;
+
+            const lastBuffAt = Number(player.heyYaAuto?.lastBuffAt || 0);
+
+            if (now - lastBuffAt < 9 * 1000) {
+              continue;
+            }
+
+            const message = grantHeyYaAutoBuffV3(player);
+
+            if (message) {
+              lines.push(message);
+              changed = true;
+            }
           }
 
-          continue;
-        }
+          if (changed) {
+            if (typeof rebuildStateAggregates === "function") {
+              rebuildStateAggregates(state);
+            }
 
-        player.heyYaFishingWindow.active = true;
+            saveState(state);
+          }
 
-        const lastBuffAt = Number(player.heyYaAuto?.lastBuffAt || 0);
+          if (!lines.length) {
+            return;
+          }
 
-        if (now - lastBuffAt < 9 * 1000) {
-          continue;
-        }
-
-        const message = grantHeyYaAutoBuffV3(player);
-
-        if (message) {
-          lines.push(message);
-          changed = true;
-        }
+          await sendGroupMessage([
+            `🗣️ *Hey Ya!* acompanha quem ainda está pescando...`,
+            ``,
+            ...lines
+          ].join(String.fromCharCode(10)), groupId);
+        });
+      } catch (error) {
+        log(`Erro no loop passivo controlado do Hey Ya (${groupId}):`, error.message);
       }
-
-      if (changed) {
-        if (typeof rebuildStateAggregates === "function") {
-          rebuildStateAggregates(state);
-        }
-
-        saveState(state);
-      }
-
-      if (!lines.length) {
-        return;
-      }
-
-      await sendGroupMessage([
-        `🗣️ *Hey Ya!* acompanha quem ainda está pescando...`,
-        ``,
-        ...lines
-      ].join(String.fromCharCode(10)));
-    } catch (error) {
-      log("Erro no loop passivo controlado do Hey Ya:", error.message);
     }
   }, 5 * 1000);
 }
@@ -3206,75 +3400,91 @@ function markHeyYaFishingActivityV2(player) {
 
 
 
-async function sendGroupMessage(text) {
-  if (!client || !ALLOWED_GROUP_ID) return;
+async function sendGroupMessage(text, groupId = getCurrentGroupId()) {
+  const targetGroupId = normalizeGroupId(groupId);
+
+  if (!client || !targetGroupId) return;
 
   try {
-    const chat = await client.getChatById(ALLOWED_GROUP_ID);
+    const chat = await client.getChatById(targetGroupId);
     await chat.sendMessage(text);
   } catch (error) {
     log("Erro ao enviar aviso global:", error.message);
   }
 }
 
-function clearScheduledEffect(effectId) {
-  const timer = globalEffectTimers.get(effectId);
+function getGlobalEffectTimerKey(effectId, groupId = getCurrentGroupId()) {
+  return `${normalizeGroupId(groupId) || "default"}:${effectId}`;
+}
+
+function clearScheduledEffect(effectId, groupId = getCurrentGroupId()) {
+  const key = getGlobalEffectTimerKey(effectId, groupId);
+  const timer = globalEffectTimers.get(key);
 
   if (timer) {
     clearTimeout(timer);
-    globalEffectTimers.delete(effectId);
+    globalEffectTimers.delete(key);
   }
 }
 
-function scheduleGlobalEffectExpiration(effect) {
+function scheduleGlobalEffectExpiration(effect, groupId = getCurrentGroupId()) {
   if (!effect || effect.type !== GLOBAL_EFFECTS.THE_WORLD) return;
 
-  clearScheduledEffect(effect.id);
+  const targetGroupId = normalizeGroupId(effect.groupId || groupId || getCurrentGroupId());
+  effect.groupId = targetGroupId || effect.groupId;
+
+  clearScheduledEffect(effect.id, targetGroupId);
 
   const delay = Math.max(0, effect.expiresAt - Date.now());
+  const timerKey = getGlobalEffectTimerKey(effect.id, targetGroupId);
 
   const timer = setTimeout(async () => {
     try {
-      const state = loadState();
-      normalizeAllPlayers(state);
+      await withGroupContext(targetGroupId, async () => {
+        const state = loadState(targetGroupId);
+        normalizeAllPlayers(state);
 
-      const existing = state.globalEffects.find((entry) => entry.id === effect.id);
-      if (!existing || Date.now() < existing.expiresAt) return;
+        const existing = state.globalEffects.find((entry) => entry.id === effect.id);
+        if (!existing || Date.now() < existing.expiresAt) return;
 
-      state.globalEffects = state.globalEffects.filter((entry) => entry.id !== effect.id);
-      saveState(state);
+        state.globalEffects = state.globalEffects.filter((entry) => entry.id !== effect.id);
+        saveState(state);
 
-      await sendGroupMessage(`⏱️ *Za Warudo* terminou. O tempo voltou a fluir normalmente para todos.`);
+        await sendGroupMessage(`⏱️ *Za Warudo* terminou. O tempo voltou a fluir normalmente para todos.`, targetGroupId);
+      });
     } catch (error) {
       log("Erro ao finalizar efeito global:", error.message);
     } finally {
-      globalEffectTimers.delete(effect.id);
+      globalEffectTimers.delete(timerKey);
     }
   }, delay);
 
-  globalEffectTimers.set(effect.id, timer);
+  globalEffectTimers.set(timerKey, timer);
 }
 
 function scheduleStoredGlobalEffects() {
-  const state = loadState();
+  for (const groupId of getRuntimeGroupIds()) {
+    const state = loadState(groupId);
 
-  for (const effect of state.globalEffects) {
-    if (effect.type === GLOBAL_EFFECTS.THE_WORLD && effect.expiresAt > Date.now()) {
-      scheduleGlobalEffectExpiration(effect);
+    for (const effect of state.globalEffects) {
+      if (effect.type === GLOBAL_EFFECTS.THE_WORLD && effect.expiresAt > Date.now()) {
+        scheduleGlobalEffectExpiration(effect, groupId);
+      }
     }
   }
 }
 
 async function flushExpiredGlobalEffects(state) {
+  const groupId = getStateGroupId(state);
   const expired = state.globalEffects.filter((effect) => effect.expiresAt <= Date.now());
 
   if (!expired.length) return;
 
   for (const effect of expired) {
-    clearScheduledEffect(effect.id);
+    clearScheduledEffect(effect.id, groupId);
 
     if (effect.type === GLOBAL_EFFECTS.THE_WORLD) {
-      await sendGroupMessage(`⏱️ *Za Warudo* terminou. O tempo voltou a fluir normalmente para todos.`);
+      await sendGroupMessage(`⏱️ *Za Warudo* terminou. O tempo voltou a fluir normalmente para todos.`, groupId);
     }
   }
 
@@ -4216,11 +4426,13 @@ async function handleChancesInfo(message) {
 }
 
 
-async function sendGroupMessage(text) {
-  if (!client || !ALLOWED_GROUP_ID) return;
+async function sendGroupMessage(text, groupId = getCurrentGroupId()) {
+  const targetGroupId = normalizeGroupId(groupId);
+
+  if (!client || !targetGroupId) return;
 
   try {
-    const chat = await client.getChatById(ALLOWED_GROUP_ID);
+    const chat = await client.getChatById(targetGroupId);
     await chat.sendMessage(text);
   } catch (error) {
     log("Erro ao enviar aviso global:", error.message);
@@ -4242,8 +4454,11 @@ async function activateTheWorld(state, player) {
     return `⛔ Já existe um *Za Warudo* ativo no grupo.`;
   }
 
+  const groupId = getStateGroupId(state);
+
   const effect = {
     id: uid("ge"),
+    groupId,
     type: GLOBAL_EFFECTS.THE_WORLD,
     ownerId: player.id,
     ownerName: player.name,
@@ -4254,9 +4469,9 @@ async function activateTheWorld(state, player) {
   state.globalEffects.push(effect);
   player.standCooldownUntil = Date.now() + getStandCooldownMs(player);
   saveState(state);
-  scheduleGlobalEffectExpiration(effect);
+  scheduleGlobalEffectExpiration(effect, groupId);
 
-  await sendGroupMessage(`🕒 *ZA WARUDO!* O tempo foi parado por *${player.name}* por 9 segundos.\n> Durante esse período, só ele pode pescar e sem gastar isca.`);
+  await sendGroupMessage(`🕒 *ZA WARUDO!* O tempo foi parado por *${player.name}* por 9 segundos.\n> Durante esse período, só ele pode pescar e sem gastar isca.`, groupId);
 
   return `🕒 *${STAND_DEFS.the_world.name}* ativado.`;
 }
@@ -4363,7 +4578,7 @@ async function activateMandomLegacyIgnoredV2_2(state, player) {
   const fallback = mandomTimelineFallbackFishingOnlyV1(state, windowMinutes);
   mandomTimelineLastActivationAtV1 = now;
 
-  const afterState = loadState();
+  const afterState = loadState(getStateGroupId(state));
   const summaryLines = mandomTimelineBuildRewindSummaryV1(beforeState, afterState, player.id);
 
   await sendGroupMessage(
@@ -4580,6 +4795,14 @@ async function activateKingCrimsonSynergy(state, player, action, targetQuery) {
 // MANDOM_CORE_CLEAN_V2_START
 
 const MANDOM_CORE_TIMELINE_FILE_V2 = path.join(DATA_DIR, "mandom_clean_timeline.json");
+
+function getMandomCoreTimelineFileV2(stateOrGroupId = getCurrentGroupId()) {
+  if (stateOrGroupId && typeof stateOrGroupId === "object") {
+    return getStateMandomTimelineFile(stateOrGroupId);
+  }
+
+  return getGroupMandomTimelineFile(stateOrGroupId);
+}
 const MANDOM_CORE_WINDOW_MS_V2 = 4 * 60 * 1000;
 const MANDOM_CORE_KEEP_EXTRA_MS_V2 = 60 * 1000;
 const MANDOM_CORE_MAX_SNAPSHOTS_V2 = 240;
@@ -4590,13 +4813,15 @@ function mandomCoreNlV2() {
   return String.fromCharCode(10);
 }
 
-function readMandomCoreTimelineV2() {
+function readMandomCoreTimelineV2(stateOrGroupId = getCurrentGroupId()) {
   try {
-    if (!fs.existsSync(MANDOM_CORE_TIMELINE_FILE_V2)) {
+    const timelineFile = getMandomCoreTimelineFileV2(stateOrGroupId);
+
+    if (!fs.existsSync(timelineFile)) {
       return [];
     }
 
-    const raw = fs.readFileSync(MANDOM_CORE_TIMELINE_FILE_V2, "utf8");
+    const raw = fs.readFileSync(timelineFile, "utf8");
     const parsed = JSON.parse(raw);
 
     return Array.isArray(parsed) ? parsed : [];
@@ -4606,14 +4831,14 @@ function readMandomCoreTimelineV2() {
   }
 }
 
-function writeMandomCoreTimelineV2(snapshots) {
+function writeMandomCoreTimelineV2(snapshots, stateOrGroupId = getCurrentGroupId()) {
   try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
+    const timelineFile = getMandomCoreTimelineFileV2(stateOrGroupId);
+
+    ensureDir(path.dirname(timelineFile));
 
     fs.writeFileSync(
-      MANDOM_CORE_TIMELINE_FILE_V2,
+      timelineFile,
       JSON.stringify(snapshots, null, 2),
       "utf8"
     );
@@ -4631,19 +4856,22 @@ function trimMandomCoreTimelineV2(snapshots, now = Date.now()) {
     .slice(-MANDOM_CORE_MAX_SNAPSHOTS_V2);
 }
 
-function captureMandomCoreSnapshotBeforeSaveV2() {
+function captureMandomCoreSnapshotBeforeSaveV2(state = null) {
   if (mandomCoreRestoringV2) {
     return;
   }
 
   try {
-    ensureDataFile();
+    const groupId = getStateGroupId(state);
+    const dataFile = getGroupDataFile(groupId);
 
-    if (!fs.existsSync(DATA_FILE)) {
+    ensureDataFile(groupId);
+
+    if (!fs.existsSync(dataFile)) {
       return;
     }
 
-    const raw = fs.readFileSync(DATA_FILE, "utf8");
+    const raw = fs.readFileSync(dataFile, "utf8");
 
     if (!raw || !raw.trim()) {
       return;
@@ -4657,14 +4885,14 @@ function captureMandomCoreSnapshotBeforeSaveV2() {
     }
 
     const now = Date.now();
-    let snapshots = readMandomCoreTimelineV2();
+    let snapshots = readMandomCoreTimelineV2(state);
     snapshots = trimMandomCoreTimelineV2(snapshots, now);
 
     const last = snapshots[snapshots.length - 1];
 
     if (last && last.raw === compactRaw) {
       last.at = now;
-      writeMandomCoreTimelineV2(snapshots);
+      writeMandomCoreTimelineV2(snapshots, state);
       return;
     }
 
@@ -4673,7 +4901,7 @@ function captureMandomCoreSnapshotBeforeSaveV2() {
       raw: compactRaw
     });
 
-    writeMandomCoreTimelineV2(trimMandomCoreTimelineV2(snapshots, now));
+    writeMandomCoreTimelineV2(trimMandomCoreTimelineV2(snapshots, now), state);
   } catch (error) {
     log("Mandom Core: erro ao capturar snapshot:", error.message);
   }
@@ -4682,7 +4910,7 @@ function captureMandomCoreSnapshotBeforeSaveV2() {
 function pickMandomCoreSnapshotV2(now = Date.now()) {
   let snapshots = readMandomCoreTimelineV2();
   snapshots = trimMandomCoreTimelineV2(snapshots, now);
-  writeMandomCoreTimelineV2(snapshots);
+  writeMandomCoreTimelineV2(snapshots, state);
 
   if (!snapshots.length) {
     return null;
@@ -4814,7 +5042,7 @@ function buildMandomCoreSummaryV2(beforeState, restoredState, actorId) {
 
 async function activateMandom(state, player) {
   const now = Date.now();
-  const snapshot = pickMandomCoreSnapshotV2(now);
+  const snapshot = pickMandomCoreSnapshotV2(state, now);
 
   if (!snapshot) {
     return [
@@ -4866,17 +5094,19 @@ async function activateMandom(state, player) {
   mandomCoreRestoringV2 = true;
 
   try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(restoredState, null, 2), "utf8");
+    fs.writeFileSync(getStateDataFile(state), JSON.stringify(restoredState, null, 2), "utf8");
   } finally {
     mandomCoreRestoringV2 = false;
   }
+
+  attachGroupContextToState(restoredState, getStateGroupId(state));
 
   writeMandomCoreTimelineV2([
     {
       at: now,
       raw: JSON.stringify(restoredState)
     }
-  ]);
+  ], restoredState);
 
   if (typeof rescheduleGlobalEffectsFromState === "function") {
     rescheduleGlobalEffectsFromState(restoredState);
@@ -4909,6 +5139,8 @@ function adminRootMandomTimelineStatusV1() {
     typeof MANDOM_CLEAN_TIMELINE_FILE_V1 !== "undefined"
       ? MANDOM_CLEAN_TIMELINE_FILE_V1
       : null,
+    getGroupMandomTimelineFile(getCurrentGroupId()),
+    path.join(getGroupDataDir(getCurrentGroupId()), "mandom_timeline.json"),
     path.join(DATA_DIR, "mandom_clean_timeline.json"),
     path.join(DATA_DIR, "mandom_timeline.json")
   ].filter(Boolean);
@@ -5379,14 +5611,16 @@ async function handlePintoRankingCommand(message, state, chat) {
 }
 
 async function flushExpiredGlobalEffects(state) {
+  const groupId = getStateGroupId(state);
   const expired = state.globalEffects.filter((effect) => effect.expiresAt <= Date.now());
 
   if (!expired.length) return;
 
   for (const effect of expired) {
-    clearScheduledEffect(effect.id);
+    clearScheduledEffect(effect.id, groupId);
+
     if (effect.type === GLOBAL_EFFECTS.THE_WORLD) {
-      await sendGroupMessage(`⏱️ *Za Warudo* terminou. O tempo voltou a fluir normalmente para todos.`);
+      await sendGroupMessage(`⏱️ *Za Warudo* terminou. O tempo voltou a fluir normalmente para todos.`, groupId);
     }
   }
 
@@ -5395,27 +5629,33 @@ async function flushExpiredGlobalEffects(state) {
 }
 
 function scheduleStoredGlobalEffects() {
-  const state = loadState();
+  for (const groupId of getRuntimeGroupIds()) {
+    const state = loadState(groupId);
 
-  for (const effect of state.globalEffects) {
-    if (effect.type === GLOBAL_EFFECTS.THE_WORLD && effect.expiresAt > Date.now()) {
-      scheduleGlobalEffectExpiration(effect);
+    for (const effect of state.globalEffects) {
+      if (effect.type === GLOBAL_EFFECTS.THE_WORLD && effect.expiresAt > Date.now()) {
+        scheduleGlobalEffectExpiration(effect, groupId);
+      }
     }
   }
 }
 
 function rescheduleGlobalEffectsFromState(state) {
-  for (const timer of globalEffectTimers.values()) {
-    clearTimeout(timer);
-  }
+  const groupId = getStateGroupId(state);
+  const timerPrefix = `${normalizeGroupId(groupId) || "default"}:`;
 
-  globalEffectTimers.clear();
+  for (const [key, timer] of globalEffectTimers.entries()) {
+    if (key.startsWith(timerPrefix)) {
+      clearTimeout(timer);
+      globalEffectTimers.delete(key);
+    }
+  }
 
   const effects = Array.isArray(state?.globalEffects) ? state.globalEffects : [];
 
   for (const effect of effects) {
     if (effect.type === GLOBAL_EFFECTS.THE_WORLD && effect.expiresAt > Date.now()) {
-      scheduleGlobalEffectExpiration(effect);
+      scheduleGlobalEffectExpiration(effect, groupId);
     }
   }
 }
@@ -7640,12 +7880,16 @@ function startHolyCorpseSpawnLoopV1() {
   holyCorpseSpawnLoopStartedV1 = true;
 
   setInterval(() => {
-    maybeSpawnHolyCorpseEventV1().catch((error) => {
-      holyCorpseSpawnLogV1("Erro no spawn do Cadáver Santo:", error.message);
-    });
+    for (const groupId of getRuntimeGroupIds()) {
+      withGroupContext(groupId, async () => {
+        await maybeSpawnHolyCorpseEventV1();
+      }).catch((error) => {
+        holyCorpseSpawnLogV1(`Erro no spawn do Cadáver Santo (${groupId}):`, error.message);
+      });
+    }
   }, 60 * 1000);
 
-  holyCorpseSpawnLogV1("Sistema de spawn do Cadáver Santo iniciado. Chance: 1/60 por minuto.");
+  holyCorpseSpawnLogV1("Sistema de spawn do Cadáver Santo iniciado. Chance: 1/60 por minuto por grupo.");
 }
 
 async function handleApproachHolyCorpseCommandV1(message, state, player) {
@@ -8343,7 +8587,7 @@ function adminRootStatusV3(state) {
     `🗝️ *Status ROOT*`,
     ``,
     `Grupo permitido:`,
-    `> ${ALLOWED_GROUP_ID || "não configurado"}`,
+    `> ${ALLOWED_GROUP_IDS.length ? ALLOWED_GROUP_IDS.join(", ") : "não configurados"}`,
     ``,
     `Jogadores salvos: *${Object.keys(state.players || {}).length}*`,
     `Peixes totais: *${Number(state.groupStats?.totalFish || 0)}*`,
@@ -9331,13 +9575,13 @@ async function adminRootBackupV3(message) {
         `⚠️ *Backup não criado*`,
         ``,
         `Arquivo principal não encontrado:`,
-        `> ${toProjectRelativePath(DATA_FILE)}`
+        `> ${toProjectRelativePath(getGroupDataFile(getCurrentGroupId()))}`
       ].join(adminRootNlV3())
     );
     return;
   }
 
-  pruneOldBackups(BACKUPS_DATA_DIR, "pesca.admin-root", 25);
+  pruneOldBackups(getGroupBackupsDataDir(getCurrentGroupId()), "pesca.admin-root", 25);
 
   await adminRootReplyV3(
     message,
@@ -10289,10 +10533,10 @@ client.on("authenticated", () => {
 
 client.on("ready", () => {
   console.log(`${BOT_NAME} pronto.`);
-  console.log(`Grupo permitido: ${ALLOWED_GROUP_ID || "não configurado"}`);
+  console.log(`Grupos permitidos: ${ALLOWED_GROUP_IDS.length ? ALLOWED_GROUP_IDS.join(", ") : "não configurados"}`);
 
-  if (!ALLOWED_GROUP_ID) {
-    console.log("ALLOWED_GROUP_ID vazio: no grupo, envie !id para pegar o ID e coloque no .env.");
+  if (!ALLOWED_GROUP_IDS.length) {
+    console.log("ALLOWED_GROUP_IDS vazio: no grupo, envie !id para pegar o ID e coloque no .env.");
   }
 
   scheduleStoredGlobalEffects();
@@ -10327,17 +10571,20 @@ client.on("message", async (message) => {
       return;
     }
 
-    if (!ALLOWED_GROUP_ID) {
-      console.log(`Comando ignorado porque ALLOWED_GROUP_ID está vazio: ${rawBody}`);
+    const groupId = chat.id._serialized;
+
+    if (!ALLOWED_GROUP_IDS.length) {
+      console.log(`Comando ignorado porque ALLOWED_GROUP_IDS está vazio: ${rawBody}`);
       return;
     }
 
-    if (chat.id._serialized !== ALLOWED_GROUP_ID) {
-      console.log(`Comando ignorado por grupo diferente: recebido=${chat.id._serialized} permitido=${ALLOWED_GROUP_ID}`);
+    if (!isGroupAllowed(groupId)) {
+      console.log(`Comando ignorado por grupo não permitido: recebido=${groupId} permitidos=${ALLOWED_GROUP_IDS.join(", ")}`);
       return;
     }
 
-    const state = loadState();
+    await withGroupContext(groupId, async () => {
+      const state = loadState(groupId);
 
     normalizeAllPlayers(state);
     await flushExpiredGlobalEffects(state);
@@ -10464,8 +10711,9 @@ client.on("message", async (message) => {
     }
 
 if (command === "!id") {
-      await replySafe(message, `Grupo: ${chat.name}\nID: ${chat.id._serialized}`);
-    }
+        await replySafe(message, `Grupo: ${chat.name}\nID: ${chat.id._serialized}`);
+      }
+    });
   } catch (error) {
     console.error("Erro ao processar mensagem:", error);
   }
