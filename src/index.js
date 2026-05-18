@@ -2442,11 +2442,9 @@ function maybeConsumeAdminScheduledFishingRewardV1(state, player, notes = []) {
   const reward = adminRootGrantScheduledFishingRewardV1(state, player, entry);
 
   if (!reward) {
-    notes.push(`🗝️ O destino agendado pelo ROOT falhou: recompensa inválida.`);
+    log("Agendamento ROOT inválido ignorado:", entry.id, entry.rewardInput || entry.rewardKey);
     return null;
   }
-
-  notes.push(`🗝️ O destino agendado pelo ROOT se cumpriu: *${entry.rewardLabel || adminFishingScheduleRewardLabelV1(adminRootNormalizeScheduledRewardV1(entry.rewardInput || entry.rewardKey))}*.`);
 
   return reward;
 }
