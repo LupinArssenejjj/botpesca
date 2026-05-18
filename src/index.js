@@ -13,6 +13,10 @@ const ALLOWED_GROUP_IDS = String(process.env.ALLOWED_GROUP_IDS || process.env.AL
   .map((groupId) => groupId.trim())
   .filter(Boolean);
 const ALLOWED_GROUP_ID = ALLOWED_GROUP_IDS[0] || "";
+const ALLOWED_GROUP_NAMES = String(process.env.ALLOWED_GROUP_NAMES || process.env.GROUP_NAMES || "")
+  .split("|")
+  .map((name) => name.trim())
+  .filter(Boolean);
 const HEADLESS = String(process.env.HEADLESS || "true") !== "false";
 
 const ROOT_DIR = process.cwd();
@@ -165,6 +169,70 @@ const GLOBAL_EFFECTS = {
 
 let client = null;
 const globalEffectTimers = new Map();
+const GROUP_NAME_CACHE = new Map();
+
+function sanitizeGroupDisplayName(name) {
+  return String(name || "").trim().replace(/\s+/g, " ");
+}
+
+function seedGroupDisplayNamesFromEnv() {
+  ALLOWED_GROUP_IDS.forEach((groupId, index) => {
+    const name = sanitizeGroupDisplayName(ALLOWED_GROUP_NAMES[index]);
+
+    if (groupId && name) {
+      GROUP_NAME_CACHE.set(groupId, name);
+    }
+  });
+}
+
+function rememberGroupDisplayName(chat) {
+  const groupId = normalizeGroupId(chat?.id?._serialized || chat?.id || "");
+  const name = sanitizeGroupDisplayName(chat?.name || chat?.formattedTitle || chat?.title || "");
+
+  if (groupId && name && chat?.isGroup !== false) {
+    GROUP_NAME_CACHE.set(groupId, name);
+  }
+}
+
+async function hydrateConfiguredGroupDisplayNames() {
+  if (!client || typeof client.getChatById !== "function") {
+    return;
+  }
+
+  for (const groupId of ALLOWED_GROUP_IDS) {
+    if (!groupId || GROUP_NAME_CACHE.has(groupId)) {
+      continue;
+    }
+
+    try {
+      const chat = await client.getChatById(groupId);
+      rememberGroupDisplayName(chat);
+    } catch (error) {
+      log("Não consegui carregar o nome do grupo:", groupId, error.message);
+    }
+  }
+}
+
+function getGroupDisplayName(groupId) {
+  const normalizedGroupId = normalizeGroupId(groupId);
+  const cachedName = GROUP_NAME_CACHE.get(normalizedGroupId);
+
+  if (cachedName) {
+    return cachedName;
+  }
+
+  const index = ALLOWED_GROUP_IDS.indexOf(normalizedGroupId);
+  const envName = sanitizeGroupDisplayName(ALLOWED_GROUP_NAMES[index]);
+
+  if (envName) {
+    GROUP_NAME_CACHE.set(normalizedGroupId, envName);
+    return envName;
+  }
+
+  return normalizedGroupId ? `Grupo ${adminRootShortIdV3(normalizedGroupId)}` : "Grupo";
+}
+
+seedGroupDisplayNamesFromEnv();
 
 const EQUIPMENT_DEFS = {
   bait_box: { key: "bait_box", emoji: "🧰", name: "Caixa de Iscas", baitBonus: 2, inventoryBonus: 0, description: "+2 iscas" },
@@ -8854,6 +8922,180 @@ const ADMIN_ROOT_ALLOWED_IDS_V3 = new Set([
 const ADMIN_ROOT_COMMANDS_V3 = new Set(["!admin", "!adm", "!root"]);
 const ADMIN_ROOT_SESSIONS_V3 = new Map();
 
+const ADMIN_ROOT_SELECTED_GROUPS_V4 = new Map();
+
+function adminRootGetConfiguredGroupsV4() {
+  return getRuntimeGroupIds().map(normalizeGroupId).filter(Boolean);
+}
+
+function adminRootResolveConfiguredGroupV4(value) {
+  const groups = adminRootGetConfiguredGroupsV4();
+  const raw = String(value || "").trim();
+  const clean = adminRootNormV3(raw);
+
+  if (!raw) {
+    return "";
+  }
+
+  const numericIndex = Number.parseInt(clean, 10);
+
+  if (Number.isInteger(numericIndex) && numericIndex >= 1 && numericIndex <= groups.length) {
+    return groups[numericIndex - 1];
+  }
+
+  const exact = groups.find((groupId) => groupId === raw);
+
+  if (exact) {
+    return exact;
+  }
+
+  const digits = adminRootDigitsV3(raw);
+
+  if (digits) {
+    const byDigits = groups.find((groupId) => adminRootDigitsV3(groupId).endsWith(digits));
+
+    if (byDigits) {
+      return byDigits;
+    }
+  }
+
+  const byName = groups.find((groupId) => {
+    const label = adminRootNormV3(adminRootGroupLabelV4(groupId));
+
+    if (!label || !clean) {
+      return false;
+    }
+
+    return label === clean || label.includes(clean) || clean.includes(label);
+  });
+
+  if (byName) {
+    return byName;
+  }
+
+  return "";
+}
+
+function adminRootGetSelectedGroupIdV4(message) {
+  const groups = adminRootGetConfiguredGroupsV4();
+
+  if (!groups.length) {
+    return getDefaultGroupId();
+  }
+
+  const key = adminRootSessionKeyV3(message);
+  const selected = normalizeGroupId(ADMIN_ROOT_SELECTED_GROUPS_V4.get(key));
+
+  if (selected && groups.includes(selected)) {
+    return selected;
+  }
+
+  return groups[0];
+}
+
+function adminRootSetSelectedGroupIdV4(message, groupId) {
+  const resolvedGroupId = adminRootResolveConfiguredGroupV4(groupId);
+
+  if (!resolvedGroupId) {
+    return "";
+  }
+
+  ADMIN_ROOT_SELECTED_GROUPS_V4.set(adminRootSessionKeyV3(message), resolvedGroupId);
+  return resolvedGroupId;
+}
+
+function adminRootGetSessionGroupIdV4(message, session) {
+  const groups = adminRootGetConfiguredGroupsV4();
+  const sessionGroupId = normalizeGroupId(session?.groupId);
+
+  if (sessionGroupId && (!groups.length || groups.includes(sessionGroupId))) {
+    return sessionGroupId;
+  }
+
+  return adminRootGetSelectedGroupIdV4(message);
+}
+
+function adminRootGroupLabelV4(groupId) {
+  return getGroupDisplayName(groupId);
+}
+
+function adminRootFormatActiveGroupV4(message) {
+  const groupId = adminRootGetSelectedGroupIdV4(message);
+
+  if (!groupId) {
+    return "não configurado";
+  }
+
+  return `${adminRootGroupLabelV4(groupId)} (${adminRootShortIdV3(groupId)})`;
+}
+
+function adminRootGroupsMenuV4(message) {
+  const groups = adminRootGetConfiguredGroupsV4();
+  const activeGroupId = adminRootGetSelectedGroupIdV4(message);
+
+  const rows = groups.map((groupId, index) => {
+    const selected = groupId === activeGroupId ? " ✅" : "";
+    return `${index + 1}. ${adminRootGroupLabelV4(groupId)}${selected}${adminRootNlV3()}   > ${groupId}`;
+  });
+
+  return [
+    `🗝️ *Escolher grupo do ROOT*`,
+    ``,
+    `Grupo ativo: *${adminRootFormatActiveGroupV4(message)}*`,
+    ``,
+    rows.length ? rows.join(adminRootNlV3()) : `_Nenhum grupo configurado no .env._`,
+    ``,
+    `Como usar:`,
+    `• !admin grupo <nome do grupo>`,
+    `• !admin grupo <ID do grupo>`,
+    ``,
+    `> Escolha pelo nome exibido acima. Depois disso, os comandos privados do admin vão mirar esse grupo.`,
+    `> Exemplo: *!admin grupo ${groups[0] ? adminRootGroupLabelV4(groups[0]) : "Nome do Grupo"}*.`
+  ].join(adminRootNlV3());
+}
+
+async function adminRootHandleGroupSelectionV4(message, parts) {
+  const wanted = String(parts.join(" ") || "").trim();
+
+  if (!wanted || ["listar", "lista", "status", "ver"].includes(adminRootNormV3(wanted))) {
+    await adminRootReplyV3(message, adminRootGroupsMenuV4(message));
+    return;
+  }
+
+  const selectedGroupId = adminRootSetSelectedGroupIdV4(message, wanted);
+
+  if (!selectedGroupId) {
+    await adminRootReplyV3(
+      message,
+      [
+        `⚠️ *Grupo não encontrado.*`,
+        ``,
+        `Use:`,
+        `• !admin grupo`,
+        `• !admin grupo <nome do grupo>`,
+        `• !admin grupo <ID do grupo>`
+      ].join(adminRootNlV3())
+    );
+    return;
+  }
+
+  adminRootClearSessionV3(message);
+
+  await adminRootReplyV3(
+    message,
+    [
+      `✅ *Grupo ROOT selecionado*`,
+      ``,
+      `Grupo ativo: *${adminRootGroupLabelV4(selectedGroupId)}*`,
+      `ID:`,
+      `> ${selectedGroupId}`,
+      ``,
+      `> Os próximos comandos privados do admin vão alterar este grupo.`
+    ].join(adminRootNlV3())
+  );
+}
+
+
 function adminRootNlV3() {
   return String.fromCharCode(10);
 }
@@ -8877,6 +9119,7 @@ function adminRootSessionKeyV3(message) {
 function adminRootSetSessionV3(message, session) {
   ADMIN_ROOT_SESSIONS_V3.set(adminRootSessionKeyV3(message), {
     ...session,
+    groupId: normalizeGroupId(session?.groupId || adminRootGetSelectedGroupIdV4(message)),
     updatedAt: Date.now()
   });
 }
@@ -8939,14 +9182,18 @@ function adminRootLineV3() {
   return `━━━━━━━━━━━━━━`;
 }
 
-function adminRootMainMenuV3() {
+function adminRootMainMenuV3(message = null) {
   return [
     `🗝️ *ROOT Privado — Bot da Pescaria*`,
     ``,
     `Controle silencioso do grupo.`,
-    `Nada daqui envia confirmação pública.`,
+    `Grupo ativo: *${adminRootFormatActiveGroupV4(message)}*`,
     ``,
     adminRootLineV3(),
+    ``,
+    `📌 *Grupo alvo*`,
+    `• !admin grupo`,
+    `• !admin grupo <nome do grupo>`,
     ``,
     `📋 *Consulta*`,
     `• !admin status`,
@@ -8982,22 +9229,30 @@ function adminRootMainMenuV3() {
     `• !admin backup`,
     `• !admin mandom-timeline`,
     ``,
-    `> Em comandos com alvo, eu vou listar os jogadores.`,
-    `> Você escolhe enviando só o número.`
+    `> Escolha o grupo com *!admin grupo* antes de alterar algo.`,
+    `> Em comandos com alvo, eu vou listar os jogadores do grupo ativo.`
   ].join(adminRootNlV3());
 }
 
-function adminRootStatusV3(state) {
+function adminRootStatusV3(state, message = null) {
+  const activeGroupId = adminRootGetSelectedGroupIdV4(message);
+
   return [
     `🗝️ *Status ROOT*`,
     ``,
-    `Grupo permitido:`,
+    `Grupo ativo:`,
+    `> ${activeGroupId || "não configurado"}`,
+    ``,
+    `Grupos permitidos:`,
     `> ${ALLOWED_GROUP_IDS.length ? ALLOWED_GROUP_IDS.join(", ") : "não configurados"}`,
     ``,
-    `Jogadores salvos: *${Object.keys(state.players || {}).length}*`,
+    `Jogadores salvos no grupo ativo: *${Object.keys(state.players || {}).length}*`,
     `Peixes totais: *${Number(state.groupStats?.totalFish || 0)}*`,
     `Lixos totais: *${Number(state.groupStats?.totalTrash || 0)}*`,
     `Lendas totais: *${Number(state.groupStats?.totalLegendary || 0)}*`,
+    ``,
+    `Arquivos do grupo ativo:`,
+    `> ${toProjectRelativePath(getGroupDataFile(activeGroupId))}`,
     ``,
     `Dono:`,
     `> ${ADMIN_ROOT_PHONE_V3}`,
@@ -9105,8 +9360,10 @@ async function adminRootGetSelectablePlayersV3(state) {
   }
 
   try {
-    if (ALLOWED_GROUP_ID) {
-      const groupChat = await client.getChatById(ALLOWED_GROUP_ID);
+    const adminGroupId = getCurrentGroupId();
+
+    if (adminGroupId) {
+      const groupChat = await client.getChatById(adminGroupId);
       const participants = Array.isArray(groupChat?.participants) ? groupChat.participants : [];
 
       for (const participant of participants) {
@@ -9142,6 +9399,8 @@ async function adminRootBuildPickerTextV3(state, action, options) {
 
   return [
     adminRootActionTitleV3(action),
+    ``,
+    `Grupo ativo: *${adminRootGroupLabelV4(getStateGroupId(state))}* (${adminRootShortIdV3(getStateGroupId(state))})`,
     ``,
     `👥 *Escolha o pescador*`,
     ``,
@@ -9506,7 +9765,7 @@ async function adminRootApplyActionV3(message, session) {
 
   if (!selected) {
     adminRootClearSessionV3(message);
-    await adminRootReplyV3(message, adminRootMainMenuV3());
+    await adminRootReplyV3(message, adminRootMainMenuV3(message));
     return;
   }
 
@@ -10084,7 +10343,7 @@ async function adminRootApplyActionV3(message, session) {
   }
 
   adminRootClearSessionV3(message);
-  await adminRootReplyV3(message, adminRootMainMenuV3());
+  await adminRootReplyV3(message, adminRootMainMenuV3(message));
 }
 
 async function adminRootHandleSessionInputV3(message, rawBody) {
@@ -10113,7 +10372,7 @@ async function adminRootHandleSessionInputV3(message, rawBody) {
 
   if (["voltar", "menu", "0"].includes(normalized) && session.step !== "choosePlayer") {
     adminRootClearSessionV3(message);
-    await adminRootReplyV3(message, adminRootMainMenuV3());
+    await adminRootReplyV3(message, adminRootMainMenuV3(message));
     return true;
   }
 
@@ -10122,7 +10381,7 @@ async function adminRootHandleSessionInputV3(message, rawBody) {
 
     if (choice === 0 || ["voltar", "menu"].includes(normalized)) {
       adminRootClearSessionV3(message);
-      await adminRootReplyV3(message, adminRootMainMenuV3());
+      await adminRootReplyV3(message, adminRootMainMenuV3(message));
       return true;
     }
 
@@ -10267,7 +10526,7 @@ async function adminRootHandleSessionInputV3(message, rawBody) {
   }
 
   adminRootClearSessionV3(message);
-  await adminRootReplyV3(message, adminRootMainMenuV3());
+  await adminRootReplyV3(message, adminRootMainMenuV3(message));
   return true;
 }
 
@@ -10290,6 +10549,8 @@ async function adminRootListPlayersMessageV3(message) {
     message,
     [
       `👥 *Jogadores do grupo*`,
+      ``,
+      `Grupo ativo: *${adminRootGroupLabelV4(getStateGroupId(state))}* (${adminRootShortIdV3(getStateGroupId(state))})`,
       ``,
       rows.length ? rows.join(adminRootNlV3()) : `_Nenhum jogador encontrado._`,
       ``,
@@ -10334,6 +10595,11 @@ async function adminRootHandleCommandV3(message, arg) {
   const subRaw = parts.shift() || "";
   const sub = adminRootNormV3(subRaw || "menu").replace(/_/g, "-");
 
+  if (["grupo", "grupos", "grupo-alvo", "grupo-admin", "alvo"].includes(sub)) {
+    await adminRootHandleGroupSelectionV4(message, parts);
+    return;
+  }
+
   // ADMIN_CLEAR_COOLDOWNS_ROUTER_V5_START
   if (["cooldown", "cooldowns", "remover-cooldown", "remover-cooldowns", "limpar-cooldown", "limpar-cooldowns", "tirar-cooldown", "tirar-cooldowns", "sem-cooldown", "meu-cooldown", "cooldown-meu"].includes(sub)) {
     const directTarget = ["meu-cooldown", "cooldown-meu"].includes(sub) ? "meu" : parts.join(" ");
@@ -10377,7 +10643,7 @@ async function adminRootHandleCommandV3(message, arg) {
 
   if (["", "menu", "help", "ajuda"].includes(sub)) {
     adminRootClearSessionV3(message);
-    await adminRootReplyV3(message, adminRootMainMenuV3());
+    await adminRootReplyV3(message, adminRootMainMenuV3(message));
     return;
   }
 
@@ -10386,7 +10652,7 @@ async function adminRootHandleCommandV3(message, arg) {
 
   if (sub === "status") {
     adminRootClearSessionV3(message);
-    await adminRootReplyV3(message, adminRootStatusV3(state));
+    await adminRootReplyV3(message, adminRootStatusV3(state, message));
     return;
   }
 
@@ -10578,11 +10844,15 @@ async function adminRootPrivateGateV3(message, chat, rawBody) {
     if (session && !ADMIN_ROOT_COMMANDS_V3.has(parseCommand(body).command)) {
       console.log(`[admin-root] sessão privada: step=${session.step} input=${body}`);
 
-      if (session.action?.type === "spawnCadaverV4") {
-        await adminRootHandleCadaverSpawnSessionV4(message, body, session);
-      } else {
-        await adminRootHandleSessionInputV3(message, body);
-      }
+      const sessionGroupId = adminRootGetSessionGroupIdV4(message, session);
+
+      await withGroupContext(sessionGroupId, async () => {
+        if (session.action?.type === "spawnCadaverV4") {
+          await adminRootHandleCadaverSpawnSessionV4(message, body, session);
+        } else {
+          await adminRootHandleSessionInputV3(message, body);
+        }
+      });
 
       return true;
     }
@@ -10606,7 +10876,11 @@ async function adminRootPrivateGateV3(message, chat, rawBody) {
   if (!owner) return true;
 
   try {
-    await adminRootHandleCommandV3(message, parsed.arg);
+    const selectedGroupId = adminRootGetSelectedGroupIdV4(message);
+
+    await withGroupContext(selectedGroupId, async () => {
+      await adminRootHandleCommandV3(message, parsed.arg);
+    });
   } catch (error) {
     console.error("[admin-root] erro:", error);
 
@@ -10998,7 +11272,7 @@ async function adminRootHandleCadaverSpawnSessionV4(message, rawBody, session) {
 
   if (["voltar", "menu", "0"].includes(norm)) {
     adminRootClearSessionV3(message);
-    await adminRootReplyV3(message, adminRootMainMenuV3());
+    await adminRootReplyV3(message, adminRootMainMenuV3(message));
     return true;
   }
 
@@ -11055,7 +11329,7 @@ async function adminRootHandleCadaverSpawnSessionV4(message, rawBody, session) {
   }
 
   adminRootClearSessionV3(message);
-  await adminRootReplyV3(message, adminRootMainMenuV3());
+  await adminRootReplyV3(message, adminRootMainMenuV3(message));
   return true;
 }
 
@@ -11300,9 +11574,15 @@ client.on("authenticated", () => {
   console.log("Autenticado.");
 });
 
-client.on("ready", () => {
+client.on("ready", async () => {
   console.log(`${BOT_NAME} pronto.`);
-  console.log(`Grupos permitidos: ${ALLOWED_GROUP_IDS.length ? ALLOWED_GROUP_IDS.join(", ") : "não configurados"}`);
+  await hydrateConfiguredGroupDisplayNames();
+
+  const allowedGroupsLog = ALLOWED_GROUP_IDS
+    .map((groupId) => `${getGroupDisplayName(groupId)} (${groupId})`)
+    .join(", ");
+
+  console.log(`Grupos permitidos: ${allowedGroupsLog || "não configurados"}`);
 
   if (!ALLOWED_GROUP_IDS.length) {
     console.log("ALLOWED_GROUP_IDS vazio: no grupo, envie !id para pegar o ID e coloque no .env.");
@@ -11326,6 +11606,7 @@ client.on("message", async (message) => {
     if (message.fromMe) return;
 
     const chat = await message.getChat();
+    rememberGroupDisplayName(chat);
     const rawBody = String(message.body || "").trim();
 
     if (await adminRootPrivateGateV3(message, chat, rawBody)) return;
