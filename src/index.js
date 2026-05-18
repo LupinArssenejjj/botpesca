@@ -1026,7 +1026,8 @@ function createPlayer(userId, name) {
     totalLegendary: 0,
     totalWeight: 0,
     biggestCatch: null,
-    inventory: []
+    inventory: [],
+    adminFishingSchedule: []
   };
 }
 
@@ -1119,6 +1120,7 @@ function getOrCreatePlayer(state, userId, name) {
   player.activeStandBuff = normalizeStandBuff(player.activeStandBuff);
   player.futureSight = Array.isArray(player.futureSight) ? player.futureSight.map(normalizeCatch).filter(Boolean) : [];
   player.synergies = normalizeSynergies(player.synergies);
+  ensureAdminFishingScheduleV1(player);
 
   ensureSpecialItems(player);
   ensureHeyYaAutoStateV3(player);
@@ -2099,6 +2101,358 @@ function maybeGrantReward(state, player) {
 
   return null;
 }
+
+
+
+// ADMIN_FISHING_SCHEDULE_V1_START
+
+function ensureAdminFishingScheduleV1(player) {
+  if (!player || typeof player !== "object") return [];
+
+  const queue = Array.isArray(player.adminFishingSchedule)
+    ? player.adminFishingSchedule
+    : [];
+
+  player.adminFishingSchedule = queue
+    .map((entry) => ({
+      id: String(entry?.id || uid("admin_schedule")),
+      rewardKey: String(entry?.rewardKey || ""),
+      rewardInput: String(entry?.rewardInput || entry?.rewardKey || ""),
+      rewardLabel: String(entry?.rewardLabel || entry?.rewardKey || "recompensa"),
+      remainingCasts: Math.max(1, Math.trunc(Number(entry?.remainingCasts || 1))),
+      initialCasts: Math.max(1, Math.trunc(Number(entry?.initialCasts || entry?.remainingCasts || 1))),
+      createdAt: Number(entry?.createdAt || Date.now()),
+      createdBy: String(entry?.createdBy || "admin"),
+      groupId: String(entry?.groupId || "")
+    }))
+    .filter((entry) => entry.rewardKey);
+
+  return player.adminFishingSchedule;
+}
+
+function adminFishingScheduleNormV1(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[ç]/g, "c")
+    .replace(/[ãáàâ]/g, "a")
+    .replace(/[éê]/g, "e")
+    .replace(/[í]/g, "i")
+    .replace(/[óôõ]/g, "o")
+    .replace(/[ú]/g, "u")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+function adminFishingScheduleRewardLabelV1(reward) {
+  if (!reward) return "recompensa";
+
+  if (reward.type === "special") {
+    const labels = {
+      stand_arrow: "🗡️ Flecha de Stand",
+      rokakaka: "🍈 Rokakaka",
+      stand_disc: "💿 Disco vazio de Stand",
+      epitaph: "🔮 Epitaph",
+      ringo_watch: "⏰ Relógio de Ringo"
+    };
+
+    return labels[reward.key] || reward.key;
+  }
+
+  if (reward.type === "effect") {
+    const effect = EFFECT_DEFS[reward.key];
+    return effect ? `${effect.emoji} ${effect.name}` : reward.key;
+  }
+
+  if (reward.type === "equipment") {
+    const equipment = EQUIPMENT_DEFS[reward.key];
+    return equipment ? `${equipment.emoji} ${equipment.name}` : reward.key;
+  }
+
+  if (reward.type === "holy_corpse") {
+    const part = HOLY_CORPSE_PARTS?.[reward.partKey];
+    return part ? `${part.emoji} ${part.name}` : `✨ ${reward.partKey}`;
+  }
+
+  return reward.key || "recompensa";
+}
+
+function adminRootNormalizeScheduledRewardV1(input) {
+  const raw = String(input || "").trim();
+  const clean = adminFishingScheduleNormV1(raw);
+
+  if (!clean) return null;
+
+  const specialAliases = {
+    "flecha": "stand_arrow",
+    "flecha stand": "stand_arrow",
+    "flecha de stand": "stand_arrow",
+    "stand arrow": "stand_arrow",
+    "stand_arrow": "stand_arrow",
+    "arrow": "stand_arrow",
+
+    "roka": "rokakaka",
+    "rokaka": "rokakaka",
+    "rokakaka": "rokakaka",
+
+    "disco": "stand_disc",
+    "disco vazio": "stand_disc",
+    "disco de stand": "stand_disc",
+    "stand disc": "stand_disc",
+    "stand_disc": "stand_disc",
+
+    "epitaph": "epitaph",
+    "epitafio": "epitaph",
+
+    "ringo": "ringo_watch",
+    "relogio": "ringo_watch",
+    "relogio ringo": "ringo_watch",
+    "relogio de ringo": "ringo_watch",
+    "ringo watch": "ringo_watch",
+    "ringo_watch": "ringo_watch"
+  };
+
+  if (specialAliases[clean]) {
+    return {
+      type: "special",
+      key: specialAliases[clean],
+      rewardKey: specialAliases[clean],
+      rewardInput: raw
+    };
+  }
+
+  for (const [key, effect] of Object.entries(EFFECT_DEFS)) {
+    const candidates = [
+      key,
+      key.replace(/_/g, " "),
+      effect.name,
+      `${effect.emoji} ${effect.name}`
+    ].map(adminFishingScheduleNormV1);
+
+    if (candidates.includes(clean)) {
+      return {
+        type: "effect",
+        key,
+        rewardKey: `effect:${key}`,
+        rewardInput: raw
+      };
+    }
+  }
+
+  for (const [key, equipment] of Object.entries(EQUIPMENT_DEFS)) {
+    const candidates = [
+      key,
+      key.replace(/_/g, " "),
+      equipment.name,
+      `${equipment.emoji} ${equipment.name}`
+    ].map(adminFishingScheduleNormV1);
+
+    if (candidates.includes(clean)) {
+      return {
+        type: "equipment",
+        key,
+        rewardKey: `equipment:${key}`,
+        rewardInput: raw
+      };
+    }
+  }
+
+  const corpseClean = clean
+    .replace(/^parte do cadaver\s+/, "")
+    .replace(/^parte de cadaver\s+/, "")
+    .replace(/^cadaver\s+/, "")
+    .replace(/^cadaverico\s+/, "")
+    .replace(/^parte\s+/, "");
+
+  if (typeof normalizeHolyCorpsePartKey === "function" && typeof HOLY_CORPSE_PARTS === "object") {
+    const partKey = normalizeHolyCorpsePartKey(corpseClean);
+    const part = HOLY_CORPSE_PARTS[partKey];
+
+    if (part) {
+      return {
+        type: "holy_corpse",
+        key: "cadaver_part",
+        partKey: part.key,
+        rewardKey: `cadaver:${part.key}`,
+        rewardInput: raw
+      };
+    }
+  }
+
+  return null;
+}
+
+function adminRootScheduledRewardExamplesV1() {
+  return [
+    `• flecha`,
+    `• rokakaka`,
+    `• disco vazio`,
+    `• epitaph`,
+    `• ringo`,
+    `• sonar portatil`,
+    `• anzol de titanio`,
+    `• caixa de iscas`,
+    `• cadaver spine`,
+    `• cadaver heart`,
+    `• cadaver olho`
+  ].join(adminRootNlV3());
+}
+
+function adminRootGrantScheduledFishingRewardV1(state, player, entry) {
+  const parsed = adminRootNormalizeScheduledRewardV1(entry.rewardInput || entry.rewardKey);
+
+  if (!parsed) return null;
+
+  if (parsed.type === "special") {
+    ensureSpecialItems(player);
+
+    if (parsed.key === "stand_arrow") {
+      player.specialItems.standArrows = Math.max(0, Number(player.specialItems.standArrows || 0)) + 1;
+
+      return {
+        type: "special",
+        key: "stand_arrow",
+        stored: true,
+        adminScheduled: true
+      };
+    }
+
+    if (parsed.key === "rokakaka") {
+      player.specialItems.rokakaka = Math.max(0, Number(player.specialItems.rokakaka || 0)) + 1;
+
+      return {
+        type: "special",
+        key: "rokakaka",
+        adminScheduled: true
+      };
+    }
+
+    if (parsed.key === "stand_disc") {
+      player.specialItems.blankStandDiscs = Math.max(0, Number(player.specialItems.blankStandDiscs || 0)) + 1;
+
+      return {
+        type: "special",
+        key: "stand_disc",
+        adminScheduled: true
+      };
+    }
+
+    if (parsed.key === "epitaph") {
+      generateFutureSight(player);
+
+      const result = {
+        type: "special",
+        key: "epitaph",
+        synergy: null,
+        adminScheduled: true
+      };
+
+      if (player.stand?.key === "king_crimson") {
+        player.synergies.kcEpitaphReady = true;
+        player.synergies.kcFutureVision = buildKCFutureVision(state, player.id);
+        result.synergy = "king_crimson";
+      }
+
+      return result;
+    }
+
+    if (parsed.key === "ringo_watch") {
+      const removed = removeLastNFishFromPlayer(player, 3);
+      player.baits = getMaxBaits(player);
+      player.lastBaitAt = Date.now();
+
+      const result = {
+        type: "special",
+        key: "ringo_watch",
+        removed,
+        synergy: null,
+        adminScheduled: true
+      };
+
+      if (player.stand?.key === "mandom") {
+        player.synergies.mandomClockUses = Number(player.synergies.mandomClockUses || 0) + 1;
+        player.synergies.mandomClockUnlocked = false;
+        result.synergy = "mandom";
+      }
+
+      return result;
+    }
+  }
+
+  if (parsed.type === "effect") {
+    const effectDef = EFFECT_DEFS[parsed.key];
+    const effect = addOrIncrementEffect(player, parsed.key, effectDef.charges);
+
+    return {
+      type: "effect",
+      def: effectDef,
+      effect,
+      adminScheduled: true
+    };
+  }
+
+  if (parsed.type === "equipment") {
+    const equipment = EQUIPMENT_DEFS[parsed.key];
+    player.equipment[parsed.key] = true;
+
+    return {
+      type: "equipment",
+      def: equipment,
+      adminScheduled: true
+    };
+  }
+
+  if (parsed.type === "holy_corpse") {
+    const part = grantHolyCorpsePart(player, parsed.partKey, 1);
+
+    if (!part) return null;
+
+    return {
+      type: "holy_corpse",
+      key: "cadaver_part",
+      part,
+      amount: 1,
+      adminScheduled: true
+    };
+  }
+
+  return null;
+}
+
+function maybeConsumeAdminScheduledFishingRewardV1(state, player, notes = []) {
+  const queue = ensureAdminFishingScheduleV1(player);
+
+  if (!queue.length) return null;
+
+  let dueIndex = -1;
+
+  for (let index = 0; index < queue.length; index += 1) {
+    queue[index].remainingCasts = Math.max(0, Number(queue[index].remainingCasts || 0) - 1);
+
+    if (dueIndex === -1 && queue[index].remainingCasts <= 0) {
+      dueIndex = index;
+    }
+  }
+
+  if (dueIndex === -1) {
+    return null;
+  }
+
+  const [entry] = queue.splice(dueIndex, 1);
+  const reward = adminRootGrantScheduledFishingRewardV1(state, player, entry);
+
+  if (!reward) {
+    notes.push(`🗝️ O destino agendado pelo ROOT falhou: recompensa inválida.`);
+    return null;
+  }
+
+  notes.push(`🗝️ O destino agendado pelo ROOT se cumpriu: *${entry.rewardLabel || adminFishingScheduleRewardLabelV1(adminRootNormalizeScheduledRewardV1(entry.rewardInput || entry.rewardKey))}*.`);
+
+  return reward;
+}
+
+// ADMIN_FISHING_SCHEDULE_V1_END
+
 
 function getGlobalEffect(state, type) {
   return state.globalEffects.find((effect) => effect.type === type) || null;
@@ -4382,6 +4736,17 @@ function formatReward(reward, player) {
     ].join(String.fromCharCode(10));
   }
 
+  if (reward.type === "holy_corpse" && reward.key === "cadaver_part") {
+    const part = reward.part || {};
+    return [
+      `✨ *Parte do Cadáver Santo encontrada!*`,
+      ``,
+      `${part.emoji || "✨"} *${part.name || "Parte desconhecida"}* foi guardada no seu inventário.`,
+      `> Use *!cadaver* para ver suas partes.`,
+      `> Use *!cadaver-usar ${part.key || "parte"}* quando quiser tentar ativar.`
+    ].join(String.fromCharCode(10));
+  }
+
   return null;
 }
 
@@ -5986,7 +6351,8 @@ notes.push(...applyCommonItemEffects(player, catchItem));
   }
 
   const refundedBaitText = maybeRefundBaitOnTrash(player, catchItem);
-  const reward = maybeGrantReward(state, player);
+  const scheduledReward = maybeConsumeAdminScheduledFishingRewardV1(state, player, notes);
+  const reward = scheduledReward || maybeGrantReward(state, player);
 
   rebuildPlayerDerivedState(player);
   rebuildStateAggregates(state);
@@ -9205,6 +9571,8 @@ function adminRootMainMenuV3(message = null) {
     `• !admin add-iscas`,
     `• !admin peixe`,
     `• !admin ranking`,
+    `• !admin agendar`,
+    `• !admin agendados`,
     ``,
     `🧬 *Itens*`,
     `• !admin rokakaka`,
@@ -9273,6 +9641,7 @@ function adminRootActionTitleV3(action) {
     cadaver: `✨ *Adicionar parte do Cadáver Santo*`,
     fish: `🎣 *Adicionar peixe administrativo*`,
     ranking: `🏆 *Alterar ranking*`,
+    scheduleReward: `🧿 *Agendar pesca*`,
     pintoEdit: `🍆 *Alterar pinto*`,
     resetCooldowns: `🧊 *Resetar cooldowns*`,
     pintoReset: `🍆 *Resetar pinto*`,
@@ -9610,6 +9979,136 @@ function adminRootAskRankingValueTextV1(session) {
 }
 
 
+
+function adminRootAskScheduleDelayTextV1(session) {
+  return [
+    adminRootActionTitleV3(session.action),
+    ``,
+    `Alvo escolhido: *${session.selected.name}*`,
+    ``,
+    `Depois de quantas pescas a recompensa deve cair?`,
+    ``,
+    `> Exemplo: *3*`,
+    `> Use *voltar* para retornar.`,
+    `> Use *cancelar* para sair.`
+  ].join(adminRootNlV3());
+}
+
+function adminRootAskScheduleRewardTextV1(session) {
+  return [
+    adminRootActionTitleV3(session.action),
+    ``,
+    `Alvo escolhido: *${session.selected.name}*`,
+    `Pescas até cair: *${session.action.delayCasts}*`,
+    ``,
+    `Digite o que deve vir nessa pesca.`,
+    ``,
+    `Exemplos:`,
+    adminRootScheduledRewardExamplesV1(),
+    ``,
+    `> Exemplo direto: *flecha*`,
+    `> Exemplo Cadáver: *cadaver spine*`
+  ].join(adminRootNlV3());
+}
+
+function adminRootFormatScheduledRewardEntryV1(player, entry, index) {
+  const shortId = String(entry.id || "").split("_").slice(-1)[0] || String(index + 1);
+
+  return [
+    `${index + 1}. *${player.name}* — ${entry.rewardLabel}`,
+    `   > Em ${entry.remainingCasts} pesca${entry.remainingCasts === 1 ? "" : "s"} | ID: ${shortId}`
+  ].join(adminRootNlV3());
+}
+
+function adminRootListScheduledRewardsTextV1(state) {
+  const rows = [];
+
+  for (const player of Object.values(state.players || {})) {
+    const queue = ensureAdminFishingScheduleV1(player);
+
+    for (const entry of queue) {
+      rows.push({ player, entry });
+    }
+  }
+
+  return [
+    `🧿 *Pescas agendadas*`,
+    ``,
+    `Grupo ativo: *${adminRootGroupLabelV4(getStateGroupId(state))}*`,
+    ``,
+    rows.length
+      ? rows.map(({ player, entry }, index) => adminRootFormatScheduledRewardEntryV1(player, entry, index)).join(adminRootNlV3())
+      : `_Nenhum destino agendado neste grupo._`,
+    ``,
+    `Comandos:`,
+    `> !admin agendar`,
+    `> !admin cancelar-agenda <número ou ID>`
+  ].join(adminRootNlV3());
+}
+
+async function adminRootListScheduledRewardsV1(message) {
+  const state = loadState();
+  normalizeAllPlayers(state);
+  await adminRootReplyV3(message, adminRootListScheduledRewardsTextV1(state));
+}
+
+async function adminRootCancelScheduledRewardV1(message, args) {
+  const target = String((args || []).join(" ") || "").trim();
+
+  if (!target) {
+    await adminRootListScheduledRewardsV1(message);
+    return;
+  }
+
+  const state = loadState();
+  normalizeAllPlayers(state);
+
+  const rows = [];
+
+  for (const player of Object.values(state.players || {})) {
+    const queue = ensureAdminFishingScheduleV1(player);
+
+    for (const entry of queue) {
+      rows.push({ player, entry });
+    }
+  }
+
+  const numeric = adminRootParseIntV3(target, null);
+  const targetNorm = adminRootNormV3(target);
+  const selected = Number.isFinite(numeric)
+    ? rows[numeric - 1]
+    : rows.find(({ entry }) => adminRootNormV3(entry.id).includes(targetNorm) || adminRootNormV3(String(entry.id).split("_").pop()).includes(targetNorm));
+
+  if (!selected) {
+    await adminRootReplyV3(
+      message,
+      [
+        `⚠️ *Agendamento não encontrado*`,
+        ``,
+        `Use *!admin agendados* para ver a lista.`
+      ].join(adminRootNlV3())
+    );
+    return;
+  }
+
+  selected.player.adminFishingSchedule = ensureAdminFishingScheduleV1(selected.player)
+    .filter((entry) => entry.id !== selected.entry.id);
+
+  adminRootCommitV3(state);
+
+  await adminRootReplyV3(
+    message,
+    [
+      `🧿 *Agendamento cancelado*`,
+      ``,
+      `Alvo: *${selected.player.name}*`,
+      `Recompensa: *${selected.entry.rewardLabel}*`,
+      `Restavam: *${selected.entry.remainingCasts} pesca${selected.entry.remainingCasts === 1 ? "" : "s"}*`
+    ].join(adminRootNlV3())
+  );
+}
+
+
 function adminRootNextStepAfterPlayerV3(action) {
   if (["view", "resetCooldowns", "pintoReset", "ban"].includes(action.type)) return "";
 
@@ -9644,6 +10143,12 @@ function adminRootNextStepAfterPlayerV3(action) {
     if (!action.metric) return "askRankingMetric";
     if (action.metric === "clear") return "";
     return action.value ? "" : "askRankingValue";
+  }
+
+  if (action.type === "scheduleReward") {
+    if (!Number.isFinite(Number(action.delayCasts))) return "askScheduleDelay";
+    if (!adminRootNormalizeScheduledRewardV1(action.rewardInput || action.rewardKey)) return "askScheduleReward";
+    return "";
   }
 
   return "";
@@ -9690,6 +10195,16 @@ async function adminRootMoveSessionStepV3(message, session, nextStep) {
 
   if (nextStep === "askPintoValue") {
     await adminRootReplyV3(message, adminRootAskPintoValueTextV1(session));
+    return;
+  }
+
+  if (nextStep === "askScheduleDelay") {
+    await adminRootReplyV3(message, adminRootAskScheduleDelayTextV1(session));
+    return;
+  }
+
+  if (nextStep === "askScheduleReward") {
+    await adminRootReplyV3(message, adminRootAskScheduleRewardTextV1(session));
     return;
   }
 
@@ -9910,6 +10425,61 @@ async function adminRootApplyActionV3(message, session) {
       );
       return;
     }
+  }
+
+  if (action.type === "scheduleReward") {
+    const delayCasts = adminRootClampV3(action.delayCasts, 1, 999);
+    const parsedReward = adminRootNormalizeScheduledRewardV1(action.rewardInput || action.rewardKey);
+
+    if (!parsedReward) {
+      session.step = "askScheduleReward";
+      adminRootSetSessionV3(message, session);
+
+      await adminRootReplyV3(
+        message,
+        [
+          `⚠️ *Recompensa inválida*`,
+          ``,
+          `Digite uma recompensa válida.`,
+          ``,
+          adminRootScheduledRewardExamplesV1()
+        ].join(adminRootNlV3())
+      );
+      return;
+    }
+
+    const queue = ensureAdminFishingScheduleV1(player);
+    const rewardLabel = adminFishingScheduleRewardLabelV1(parsedReward);
+    const entry = {
+      id: uid("admin_schedule"),
+      rewardKey: parsedReward.rewardKey || parsedReward.key,
+      rewardInput: action.rewardInput || action.rewardKey,
+      rewardLabel,
+      remainingCasts: delayCasts,
+      initialCasts: delayCasts,
+      createdAt: Date.now(),
+      createdBy: adminRootDigitsV3(message.from),
+      groupId: getStateGroupId(state)
+    };
+
+    queue.push(entry);
+    adminRootCommitV3(state);
+    adminRootClearSessionV3(message);
+
+    await adminRootReplyV3(
+      message,
+      [
+        `🧿 *Pesca agendada*`,
+        ``,
+        `Grupo: *${adminRootGroupLabelV4(getStateGroupId(state))}*`,
+        `Alvo: *${player.name}*`,
+        `Recompensa: *${rewardLabel}*`,
+        `Cai em: *${delayCasts} pesca${delayCasts === 1 ? "" : "s"}*`,
+        ``,
+        `> Quando o alvo completar a contagem usando *!pescar*, essa recompensa será entregue.`
+      ].join(adminRootNlV3())
+    );
+    return;
   }
 
   if (action.type === "setStand") {
@@ -10525,6 +11095,56 @@ async function adminRootHandleSessionInputV3(message, rawBody) {
     return true;
   }
 
+  if (session.step === "askScheduleDelay") {
+    const delayCasts = adminRootParseIntV3(input, null);
+
+    if (!Number.isFinite(delayCasts) || delayCasts < 1) {
+      await adminRootReplyV3(
+        message,
+        [
+          `⚠️ *Quantidade inválida*`,
+          ``,
+          `Digite em quantas pescas a recompensa deve cair.`,
+          ``,
+          `> Exemplo: *3*`
+        ].join(adminRootNlV3())
+      );
+      return true;
+    }
+
+    session.action.delayCasts = delayCasts;
+    const nextStep = adminRootNextStepAfterPlayerV3(session.action);
+
+    if (nextStep) {
+      await adminRootMoveSessionStepV3(message, session, nextStep);
+      return true;
+    }
+
+    await adminRootApplyActionV3(message, session);
+    return true;
+  }
+
+  if (session.step === "askScheduleReward") {
+    session.action.rewardInput = input;
+
+    if (!adminRootNormalizeScheduledRewardV1(input)) {
+      await adminRootReplyV3(
+        message,
+        [
+          `⚠️ *Recompensa inválida*`,
+          ``,
+          `Escolha uma das opções ou use uma key válida:`,
+          ``,
+          adminRootScheduledRewardExamplesV1()
+        ].join(adminRootNlV3())
+      );
+      return true;
+    }
+
+    await adminRootApplyActionV3(message, session);
+    return true;
+  }
+
   adminRootClearSessionV3(message);
   await adminRootReplyV3(message, adminRootMainMenuV3(message));
   return true;
@@ -10640,6 +11260,32 @@ async function adminRootHandleCommandV3(message, arg) {
   // ADMIN_ROOT_SPAWN_COMMAND_ROUTER_V4_END
 
 
+
+  if (["agendar", "agenda", "destino", "forcar", "forçar", "pesca-agendada", "proxima-pesca", "próxima-pesca"].includes(sub)) {
+    const delayCasts = parts.length ? adminRootParseIntV3(parts[0], null) : null;
+    const rewardInput = Number.isFinite(delayCasts)
+      ? parts.slice(1).join(" ")
+      : parts.join(" ");
+
+    await adminRootStartPlayerPickerV3(message, {
+      type: "scheduleReward",
+      delayCasts,
+      rewardInput
+    });
+    return;
+  }
+
+  if (["agendados", "agenda-lista", "destinos", "pescas-agendadas"].includes(sub)) {
+    adminRootClearSessionV3(message);
+    await adminRootListScheduledRewardsV1(message);
+    return;
+  }
+
+  if (["cancelar-agenda", "cancelar-agendamento", "remover-agenda", "limpar-agenda"].includes(sub)) {
+    adminRootClearSessionV3(message);
+    await adminRootCancelScheduledRewardV1(message, parts);
+    return;
+  }
 
   if (["", "menu", "help", "ajuda"].includes(sub)) {
     adminRootClearSessionV3(message);
