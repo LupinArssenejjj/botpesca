@@ -3779,6 +3779,209 @@ function formatPlayerCard(player, state) {
   ].join("\n");
 }
 
+
+function rankingAdminNormV1(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function ensureAdminRankingAdjustmentsV1(player) {
+  if (!player || typeof player !== "object") return { totalWeightKg: 0, totalFish: 0, biggestCatch: null };
+
+  if (!player.adminRanking || typeof player.adminRanking !== "object") {
+    player.adminRanking = {};
+  }
+
+  player.adminRanking.totalWeightKg = round(Number(player.adminRanking.totalWeightKg || 0));
+  player.adminRanking.totalFish = Math.trunc(Number(player.adminRanking.totalFish || 0));
+
+  if (player.adminRanking.biggestCatch && typeof player.adminRanking.biggestCatch === "object") {
+    player.adminRanking.biggestCatch = {
+      cid: player.adminRanking.biggestCatch.cid || uid("adminrank"),
+      kind: "fish",
+      name: String(player.adminRanking.biggestCatch.name || "Peixe Administrativo"),
+      emoji: String(player.adminRanking.biggestCatch.emoji || "🐟"),
+      rarity: String(player.adminRanking.biggestCatch.rarity || "administrativo"),
+      weightKg: round(player.adminRanking.biggestCatch.weightKg || 0),
+      caughtAt: Number(player.adminRanking.biggestCatch.caughtAt || Date.now()),
+      source: "admin_ranking"
+    };
+
+    if (player.adminRanking.biggestCatch.weightKg <= 0) {
+      player.adminRanking.biggestCatch = null;
+    }
+  } else {
+    player.adminRanking.biggestCatch = null;
+  }
+
+  return player.adminRanking;
+}
+
+function getRankingTotalWeightV1(player) {
+  const adjustments = ensureAdminRankingAdjustmentsV1(player);
+  return round(Math.max(0, Number(player?.totalWeight || 0) + Number(adjustments.totalWeightKg || 0)));
+}
+
+function getRankingTotalFishV1(player) {
+  const adjustments = ensureAdminRankingAdjustmentsV1(player);
+  return Math.max(0, Math.trunc(Number(player?.totalFish || 0) + Number(adjustments.totalFish || 0)));
+}
+
+function getRankingBiggestCatchV1(player) {
+  const adjustments = ensureAdminRankingAdjustmentsV1(player);
+  const override = adjustments.biggestCatch;
+  const current = player?.biggestCatch ? normalizeCatch(player.biggestCatch) : null;
+
+  if (override && Number(override.weightKg || 0) > 0) {
+    return override;
+  }
+
+  return current;
+}
+
+function getRankingAdjustmentSummaryV1(player) {
+  const adjustments = ensureAdminRankingAdjustmentsV1(player);
+  const lines = [];
+
+  if (Number(adjustments.totalWeightKg || 0) !== 0) {
+    lines.push(`Peso: ${adjustments.totalWeightKg >= 0 ? "+" : ""}${formatWeight(adjustments.totalWeightKg)}`);
+  }
+
+  if (Number(adjustments.totalFish || 0) !== 0) {
+    lines.push(`Capturas: ${adjustments.totalFish >= 0 ? "+" : ""}${adjustments.totalFish}`);
+  }
+
+  if (adjustments.biggestCatch) {
+    lines.push(`Maior peixe: ${adjustments.biggestCatch.name} (${formatWeight(adjustments.biggestCatch.weightKg)})`);
+  }
+
+  return lines.length ? lines.join(" | ") : "Sem ajuste manual";
+}
+
+function normalizeAdminRankingMetricV1(value) {
+  const clean = rankingAdminNormV1(value).replace(/_/g, "-").replace(/\s+/g, "-");
+
+  if (["1", "peso", "peso-total", "kg", "pesado", "total"].includes(clean)) return "weight";
+  if (["2", "quantidade", "qtd", "capturas", "peixes", "fish", "total-fish"].includes(clean)) return "fish";
+  if (["3", "maior", "maior-peixe", "biggest", "peixe", "recorde"].includes(clean)) return "biggest";
+  if (["4", "limpar", "reset", "resetar", "zerar", "remover"].includes(clean)) return "clear";
+
+  return "";
+}
+
+function formatAdminRankingMetricV1(metric) {
+  if (metric === "weight") return "Peso total";
+  if (metric === "fish") return "Quantidade de capturas";
+  if (metric === "biggest") return "Maior peixe";
+  if (metric === "clear") return "Limpar ajustes";
+  return "Ranking";
+}
+
+function parseAdminRankingNumberChangeV1(rawValue) {
+  const raw = String(rawValue || "").trim();
+  const clean = raw.replace(",", ".");
+  const isDelta = /^[+-]/.test(clean);
+  const valueText = clean.replace(/^=/, "");
+  const value = Number(valueText);
+
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+
+  return {
+    raw,
+    value,
+    isDelta
+  };
+}
+
+function applyAdminRankingNumberChangeV1(player, metric, rawValue) {
+  const parsed = parseAdminRankingNumberChangeV1(rawValue);
+
+  if (!parsed) {
+    return null;
+  }
+
+  const adjustments = ensureAdminRankingAdjustmentsV1(player);
+
+  if (metric === "weight") {
+    const base = round(player.totalWeight || 0);
+    const before = getRankingTotalWeightV1(player);
+    const target = parsed.isDelta ? before + parsed.value : parsed.value;
+    const after = round(Math.max(0, target));
+
+    adjustments.totalWeightKg = round(after - base);
+
+    return {
+      label: "Peso total",
+      before: formatWeight(before),
+      after: formatWeight(after),
+      adjustment: `${adjustments.totalWeightKg >= 0 ? "+" : ""}${formatWeight(adjustments.totalWeightKg)}`
+    };
+  }
+
+  if (metric === "fish") {
+    const base = Math.trunc(Number(player.totalFish || 0));
+    const before = getRankingTotalFishV1(player);
+    const target = parsed.isDelta ? before + parsed.value : parsed.value;
+    const after = Math.max(0, Math.trunc(target));
+
+    adjustments.totalFish = after - base;
+
+    return {
+      label: "Quantidade de capturas",
+      before: String(before),
+      after: String(after),
+      adjustment: `${adjustments.totalFish >= 0 ? "+" : ""}${adjustments.totalFish}`
+    };
+  }
+
+  return null;
+}
+
+function parseAdminRankingBiggestValueV1(rawValue) {
+  const input = String(rawValue || "").trim();
+
+  if (!input) return null;
+
+  const normalized = rankingAdminNormV1(input);
+
+  if (["limpar", "reset", "resetar", "remover", "0"].includes(normalized)) {
+    return { clear: true };
+  }
+
+  const match = input.match(/^([0-9]+(?:[,.][0-9]+)?)(?:\s+(.+))?$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const kg = Number(match[1].replace(",", "."));
+
+  if (!Number.isFinite(kg) || kg <= 0) {
+    return null;
+  }
+
+  return {
+    clear: false,
+    kg,
+    name: String(match[2] || "Peixe Administrativo").trim()
+  };
+}
+
+function clearAdminRankingAdjustmentsV1(player) {
+  player.adminRanking = {
+    totalWeightKg: 0,
+    totalFish: 0,
+    biggestCatch: null,
+    updatedAt: Date.now()
+  };
+}
+
+
 function buildRanking(state, argument) {
   const players = Object.values(state.players);
   const medals = ["🥇", "🥈", "🥉"];
@@ -3787,16 +3990,21 @@ function buildRanking(state, argument) {
 
   if (argument === "pesado") {
     const ranked = players
-      .filter((player) => player.totalFish > 0)
-      .sort((a, b) => b.totalWeight - a.totalWeight)
+      .map((player) => ({
+        player,
+        totalWeight: getRankingTotalWeightV1(player),
+        totalFish: getRankingTotalFishV1(player)
+      }))
+      .filter((entry) => entry.totalWeight > 0 || entry.totalFish > 0)
+      .sort((a, b) => b.totalWeight - a.totalWeight || b.totalFish - a.totalFish)
       .slice(0, 10);
 
     return [
       `🏆 *Ranking de Pescaria deste Grupo* (Peso Total)`,
       "",
-      ...ranked.map((player, index) => {
+      ...ranked.map((entry, index) => {
         const medal = medals[index] || `${index + 1}.`;
-        return `${medal} ${player.name}: ${formatWeight(player.totalWeight)}`;
+        return `${medal} ${entry.player.name}: ${formatWeight(entry.totalWeight)}`;
       }),
       "",
       `Outros rankings disponíveis:`,
@@ -3808,16 +4016,21 @@ function buildRanking(state, argument) {
 
   if (argument === "quantidade") {
     const ranked = players
-      .filter((player) => player.totalFish > 0)
+      .map((player) => ({
+        player,
+        totalFish: getRankingTotalFishV1(player),
+        totalWeight: getRankingTotalWeightV1(player)
+      }))
+      .filter((entry) => entry.totalFish > 0)
       .sort((a, b) => b.totalFish - a.totalFish || b.totalWeight - a.totalWeight)
       .slice(0, 10);
 
     return [
       `🏆 *Ranking de Pescaria deste Grupo* (Quantidade)`,
       "",
-      ...ranked.map((player, index) => {
+      ...ranked.map((entry, index) => {
         const medal = medals[index] || `${index + 1}.`;
-        return `${medal} ${player.name}: ${player.totalFish} capturas`;
+        return `${medal} ${entry.player.name}: ${entry.totalFish} capturas`;
       }),
       "",
       `Outros rankings disponíveis:`,
@@ -3828,8 +4041,8 @@ function buildRanking(state, argument) {
   }
 
   const ranked = players
-    .filter((player) => player.biggestCatch)
-    .map((player) => ({ player, catchItem: player.biggestCatch }))
+    .map((player) => ({ player, catchItem: getRankingBiggestCatchV1(player) }))
+    .filter((entry) => entry.catchItem)
     .sort((a, b) => b.catchItem.weightKg - a.catchItem.weightKg)
     .slice(0, 10);
 
@@ -3840,7 +4053,8 @@ function buildRanking(state, argument) {
     "",
     ...ranked.map((entry, index) => {
       const medal = medals[index] || `${index + 1}.`;
-      return `${medal} ${entry.player.name}: ${entry.catchItem.name} de ${formatWeight(entry.catchItem.weightKg)}`;
+      const adminTag = entry.catchItem.source === "admin_ranking" ? " _ajuste ROOT_" : "";
+      return `${medal} ${entry.player.name}: ${entry.catchItem.name} de ${formatWeight(entry.catchItem.weightKg)}${adminTag}`;
     }),
     "",
     `Outros rankings disponíveis:`,
@@ -4282,6 +4496,194 @@ function formatPintoRanking(state, chatName) {
       return `${medal} ${player.name}: ${player.score} pontos`;
     })
   ].join("\n");
+}
+
+
+function adminRootAskPintoValueTextV1(session) {
+  const selectedName = session?.selected?.name || "jogador";
+
+  return [
+    `🍆 *Alterar pinto*`,
+    ``,
+    `Alvo: *${selectedName}*`,
+    ``,
+    `Envie o novo score ou uma alteração:`,
+    `> 850`,
+    `> =850`,
+    `> +50`,
+    `> -25`,
+    ``,
+    `Também dá para ajustar medidas junto:`,
+    `> 850 ereto=24 flacido=11 circ=14`,
+    ``,
+    `Para zerar o registro:`,
+    `> limpar`,
+    ``,
+    `> Isso altera o *!pinto-ranking* deste grupo.`
+  ].join(adminRootNlV3());
+}
+
+function adminRootNormalizePintoMeasureKeyV1(value) {
+  const clean = adminRootNormV3(value).replace(/[^a-z0-9]/g, "");
+
+  if (["ereto", "duro", "erect", "erectcm", "comprimentoereto"].includes(clean)) return "erectCm";
+  if (["flacido", "mole", "flaccid", "flaccidcm", "comprimentoflacido"].includes(clean)) return "flaccidCm";
+  if (["circ", "circunferencia", "grossura", "girth", "girthcm"].includes(clean)) return "girthCm";
+  if (["score", "pontos", "pontuacao", "pontuacao"].includes(clean)) return "score";
+
+  return "";
+}
+
+function adminRootParsePintoEditValueV1(rawValue) {
+  const input = String(rawValue || "").trim();
+
+  if (!input) return null;
+
+  const normalized = adminRootNormV3(input);
+
+  if (["limpar", "reset", "resetar", "zerar", "remover", "0"].includes(normalized)) {
+    return { clear: true, score: null, measures: {} };
+  }
+
+  const tokens = input.split(/\s+/).filter(Boolean);
+  const measures = {};
+  let scoreToken = "";
+
+  for (const token of tokens) {
+    const pair = token.match(/^([^:=]+)[:=]([+-]?[0-9]+(?:[,.][0-9]+)?)$/);
+
+    if (pair) {
+      const key = adminRootNormalizePintoMeasureKeyV1(pair[1]);
+      const value = adminRootParseNumberV3(pair[2], null);
+
+      if (!key || !Number.isFinite(value)) {
+        return null;
+      }
+
+      if (key === "score") {
+        scoreToken = pair[2];
+      } else {
+        measures[key] = value;
+      }
+
+      continue;
+    }
+
+    if (!scoreToken && /^[=+-]?[0-9]+(?:[,.][0-9]+)?$/.test(token)) {
+      scoreToken = token;
+      continue;
+    }
+
+    return null;
+  }
+
+  const score = scoreToken ? parseAdminRankingNumberChangeV1(scoreToken) : null;
+
+  if (scoreToken && !score) {
+    return null;
+  }
+
+  if (!score && !Object.keys(measures).length) {
+    return null;
+  }
+
+  return {
+    clear: false,
+    score,
+    measures
+  };
+}
+
+function adminRootGetPintoRecordForPlayerV1(state, player) {
+  ensureMiniGamesState(state);
+  return getOrCreatePintoPlayer(state, player.id, player.name);
+}
+
+function adminRootFormatPintoRecordV1(record) {
+  if (!record || Number(record.score || 0) <= 0) {
+    return "Sem avaliação";
+  }
+
+  return `${Math.trunc(Number(record.score || 0))} pontos — ${Number(record.erectCm || 0).toFixed(1)}cm ereto`;
+}
+
+function adminRootApplyPintoEditV1(state, player, rawValue) {
+  const parsed = adminRootParsePintoEditValueV1(rawValue);
+
+  if (!parsed) {
+    return null;
+  }
+
+  ensureMiniGamesState(state);
+
+  if (parsed.clear) {
+    const before = adminRootGetPintoRecordForPlayerV1(state, player);
+
+    state.miniGames.pinto.players[player.id] = {
+      id: player.id,
+      name: player.name,
+      lastPlayedAt: 0,
+      flaccidCm: 0,
+      erectCm: 0,
+      girthCm: 0,
+      score: 0,
+      lastResultAt: 0
+    };
+
+    return {
+      cleared: true,
+      before: adminRootFormatPintoRecordV1(before),
+      after: "Sem avaliação"
+    };
+  }
+
+  const record = adminRootGetPintoRecordForPlayerV1(state, player);
+  const before = {
+    flaccidCm: Number(record.flaccidCm || 0),
+    erectCm: Number(record.erectCm || 0),
+    girthCm: Number(record.girthCm || 0),
+    score: Math.trunc(Number(record.score || 0))
+  };
+
+  if (parsed.score) {
+    const target = parsed.score.isDelta ? before.score + parsed.score.value : parsed.score.value;
+    record.score = Math.max(0, Math.trunc(target));
+  }
+
+  if (Object.prototype.hasOwnProperty.call(parsed.measures, "flaccidCm")) {
+    record.flaccidCm = round(Math.max(0, parsed.measures.flaccidCm));
+  }
+
+  if (Object.prototype.hasOwnProperty.call(parsed.measures, "erectCm")) {
+    record.erectCm = round(Math.max(0, parsed.measures.erectCm));
+  }
+
+  if (Object.prototype.hasOwnProperty.call(parsed.measures, "girthCm")) {
+    record.girthCm = round(Math.max(0, parsed.measures.girthCm));
+  }
+
+  if (Number(record.score || 0) > 0 && Number(record.erectCm || 0) <= 0) {
+    record.erectCm = round(Math.max(1, Math.min(99, Number(record.score || 0) / 32)));
+  }
+
+  if (Number(record.score || 0) > 0 && Number(record.flaccidCm || 0) <= 0) {
+    record.flaccidCm = round(Math.max(0.5, record.erectCm * 0.45));
+  }
+
+  if (Number(record.score || 0) > 0 && Number(record.girthCm || 0) <= 0) {
+    record.girthCm = round(Math.max(1, record.erectCm * 0.55));
+  }
+
+  record.name = player.name;
+  record.lastPlayedAt = Date.now();
+  record.lastResultAt = Date.now();
+
+  return {
+    cleared: false,
+    before: `${before.score} pontos — ${before.erectCm.toFixed(1)}cm ereto`,
+    after: adminRootFormatPintoRecordV1(record),
+    record
+  };
 }
 
 
@@ -5762,45 +6164,14 @@ function normalizeRokakakaAssetV2(asset) {
     "efeitos": "efeitos",
     "buff": "efeitos",
     "buffs": "efeitos",
-
-    "item": "listar-itens",
-    "itens": "listar-itens",
-    "inventario": "listar-itens",
-    "inventario do alvo": "listar-itens",
-    "lista": "listar-itens",
-    "listar": "listar-itens",
-
-    "cadaver": "cadaver",
-    "cadaver santo": "cadaver",
-    "parte": "cadaver",
-    "parte santa": "cadaver",
-    "partes": "cadaver",
-    "partes do cadaver": "cadaver",
-    "partes do cadaver santo": "cadaver"
+    "item": "rokakaka",
+    "itens": "efeitos"
   };
 
-  if (aliases[clean]) {
-    return aliases[clean];
-  }
-
-  if (typeof normalizeHolyCorpsePartKey === "function" && typeof HOLY_CORPSE_PARTS !== "undefined") {
-    const partKey = normalizeHolyCorpsePartKey(clean);
-
-    if (HOLY_CORPSE_PARTS[partKey]) {
-      return `cadaver:${partKey}`;
-    }
-  }
-
-  return clean;
+  return aliases[clean] || clean;
 }
 
 function getRokakakaAssetLabelV2(asset) {
-  if (isRokakakaHolyCorpseAssetV3(asset)) {
-    const partKey = getRokakakaHolyCorpsePartKeyV3(asset);
-    const part = typeof HOLY_CORPSE_PARTS !== "undefined" ? HOLY_CORPSE_PARTS[partKey] : null;
-    return part ? `parte do Cadáver: ${part.emoji} ${part.name}` : "parte do Cadáver Santo";
-  }
-
   if (asset === "pinto") return "pontos do !pinto";
   if (asset === "maior-peixe") return "maior peixe";
   if (asset === "stand") return "Stand";
@@ -5809,75 +6180,8 @@ function getRokakakaAssetLabelV2(asset) {
   if (asset === "disco-vazio") return "Disco de Stand vazio";
   if (asset === "disco-stand") return "Disco com Stand";
   if (asset === "efeitos") return "efeitos/buffs ativos";
-  if (asset === "cadaver") return "partes do Cadáver Santo";
-  if (asset === "listar-itens") return "lista de itens";
   return asset;
 }
-
-function isRokakakaHolyCorpseAssetV3(asset) {
-  return String(asset || "").startsWith("cadaver:");
-}
-
-function getRokakakaHolyCorpsePartKeyV3(asset) {
-  return String(asset || "").replace("cadaver:", "");
-}
-
-function getRokakakaHolyCorpsePartValueV3(partKey) {
-  const values = {
-    heart: 1050,
-    spine: 950,
-    left_arm: 900,
-    eye: 820,
-    skull: 780,
-    legs: 740,
-    rib_cage: 700
-  };
-
-  return Number(values[partKey] || 650);
-}
-
-function getRokakakaHolyCorpsePartAmountV3(player, partKey) {
-  if (typeof ensureHolyCorpseInventory === "function") {
-    ensureHolyCorpseInventory(player);
-  }
-
-  return Math.max(0, Number(player?.holyCorpse?.parts?.[partKey] || 0));
-}
-
-function getRokakakaHolyCorpseAssetKeysV3(player) {
-  if (typeof HOLY_CORPSE_PARTS === "undefined") {
-    return [];
-  }
-
-  if (typeof ensureHolyCorpseInventory === "function") {
-    ensureHolyCorpseInventory(player);
-  }
-
-  return Object.keys(HOLY_CORPSE_PARTS)
-    .filter((partKey) => getRokakakaHolyCorpsePartAmountV3(player, partKey) > 0)
-    .map((partKey) => `cadaver:${partKey}`);
-}
-
-function getRokakakaBaseAssetKeysV3() {
-  return [
-    "pinto",
-    "maior-peixe",
-    "stand",
-    "iscas",
-    "rokakaka",
-    "disco-vazio",
-    "disco-stand",
-    "efeitos"
-  ];
-}
-
-function getRokakakaAllAssetKeysV3(player) {
-  return [
-    ...getRokakakaBaseAssetKeysV3(),
-    ...getRokakakaHolyCorpseAssetKeysV3(player)
-  ];
-}
-
 
 function getRokakakaPintoScoreV2(state, player) {
   ensureMiniGamesState(state);
@@ -5913,19 +6217,6 @@ function getRokakakaStandDiscValueV2(player) {
 
 function getRokakakaAssetValueV2(state, player, asset, options = {}) {
   ensureRokakakaSpecialItemsV2(player);
-
-  if (isRokakakaHolyCorpseAssetV3(asset)) {
-    const partKey = getRokakakaHolyCorpsePartKeyV3(asset);
-    return getRokakakaHolyCorpsePartAmountV3(player, partKey) > 0
-      ? getRokakakaHolyCorpsePartValueV3(partKey)
-      : 0;
-  }
-
-  if (asset === "cadaver") {
-    return getRokakakaHolyCorpseAssetKeysV3(player).reduce((sum, partAsset) => {
-      return sum + getRokakakaAssetValueV2(state, player, partAsset, options);
-    }, 0);
-  }
 
   if (asset === "pinto") {
     return getRokakakaPintoScoreV2(state, player);
@@ -5968,7 +6259,18 @@ function getRokakakaAssetValueV2(state, player, asset, options = {}) {
 }
 
 function getRokakakaAvailableAssetsV2(state, actor, target, desiredAsset) {
-  return getRokakakaAllAssetKeysV3(actor)
+  const assets = [
+    "pinto",
+    "maior-peixe",
+    "stand",
+    "iscas",
+    "rokakaka",
+    "disco-vazio",
+    "disco-stand",
+    "efeitos"
+  ];
+
+  return assets
     .filter((asset) => {
       if (asset === "stand" && target.stand && desiredAsset !== "stand") {
         return false;
@@ -5982,71 +6284,6 @@ function getRokakakaAvailableAssetsV2(state, actor, target, desiredAsset) {
       value: getRokakakaAssetValueV2(state, actor, asset, { reserveRokakaka: 1 })
     }));
 }
-
-function getRokakakaTargetItemOptionsV3(state, target) {
-  return getRokakakaAllAssetKeysV3(target)
-    .map((asset) => ({
-      asset,
-      label: getRokakakaAssetLabelV2(asset),
-      value: getRokakakaAssetValueV2(state, target, asset)
-    }))
-    .filter((item) => item.value > 0);
-}
-
-function formatRokakakaTargetItemsV3(state, target) {
-  const items = getRokakakaTargetItemOptionsV3(state, target);
-
-  if (!items.length) {
-    return [
-      `🍈 *Rokakaka — itens de ${target.name}*`,
-      ``,
-      `Não encontrei itens trocáveis nesse jogador.`,
-      ``,
-      `Use:`,
-      `> !rokakaka <nome> itens`
-    ].join(rokakakaNlV2());
-  }
-
-  return [
-    `🍈 *Rokakaka — itens de ${target.name}*`,
-    ``,
-    `Escolha pelo número ou pelo nome do item:`,
-    ``,
-    ...items.map((item, index) => {
-      return `${index + 1}. *${item.label}* — valor ${item.value}`;
-    }),
-    ``,
-    `Como usar:`,
-    `> !rokakaka ${target.name} 1`,
-    `> !rokakaka ${target.name} stand`,
-    `> !rokakaka ${target.name} cadaver`,
-    ``,
-    `> A troca só acontece se existir uma compensação equivalente.`
-  ].join(rokakakaNlV2());
-}
-
-function parseRokakakaNumericChoiceV3(state, target, rawChoice) {
-  const clean = normalizeRokakakaTextV2(rawChoice);
-
-  if (!/^\d+$/.test(clean)) {
-    return null;
-  }
-
-  const index = Number(clean) - 1;
-  const items = getRokakakaTargetItemOptionsV3(state, target);
-
-  if (index < 0 || index >= items.length) {
-    return {
-      invalidChoice: true,
-      choiceNumber: Number(clean)
-    };
-  }
-
-  return {
-    desiredAsset: items[index].asset
-  };
-}
-
 
 function getRokakakaFairnessV2(giveValue, receiveValue) {
   const average = Math.max(1, (giveValue + receiveValue) / 2);
@@ -6193,54 +6430,30 @@ function parseRokakakaAutoCommandV2(state, actor, arg) {
     return null;
   }
 
-  const rest = String(resolved.rest || "").trim();
-  const normalizedRest = normalizeRokakakaAssetV2(rest);
-
-  if (!rest || normalizedRest === "listar-itens" || normalizedRest === "cadaver") {
-    return {
-      forced,
-      simulate,
-      target: resolved.target,
-      listItems: true,
-      listMode: normalizedRest === "cadaver" ? "cadaver" : "all"
-    };
-  }
-
-  const numericChoice = parseRokakakaNumericChoiceV3(state, resolved.target, rest);
-
-  if (numericChoice?.invalidChoice) {
-    return {
-      forced,
-      simulate,
-      target: resolved.target,
-      invalidChoice: true,
-      choiceNumber: numericChoice.choiceNumber
-    };
-  }
+  const desiredAsset = normalizeRokakakaAssetV2(resolved.rest);
 
   return {
     forced,
     simulate,
     target: resolved.target,
-    desiredAsset: numericChoice?.desiredAsset || normalizedRest
+    desiredAsset
   };
 }
 
 function getRokakakaAutoHelpV2() {
   return [
-    `🍈 *Rokakaka*`,
+    `🍈 *Rokakaka — Sistema Automático*`,
     ``,
-    `Use a fruta para pedir um item de outro jogador.`,
-    `O bot calcula uma compensação equivalente com os seus próprios bens.`,
+    `Agora você só diz *de quem* e *o que quer*.`,
+    `O bot escolhe automaticamente o que você dará em troca.`,
     ``,
     `Uso:`,
-    `• !rokakaka <nome> itens`,
-    `• !rokakaka <nome> <número>`,
     `• !rokakaka <nome> <item>`,
-    `• !rokakaka simular <nome> <item>`,
+    `• !rokakaka pegar <nome> <item>`,
     `• !rokakaka forcar <nome> <item>`,
+    `• !rokakaka simular <nome> <item>`,
     ``,
-    `Itens possíveis:`,
+    `Itens que podem ser pedidos:`,
     `• pinto`,
     `• maior-peixe`,
     `• stand`,
@@ -6249,15 +6462,14 @@ function getRokakakaAutoHelpV2() {
     `• disco-vazio`,
     `• disco-stand`,
     `• efeitos`,
-    `• partes do cadáver`,
     ``,
     `Exemplos:`,
-    `> !rokakaka Alec itens`,
-    `> !rokakaka Alec 1`,
-    `> !rokakaka João stand`,
-    `> !rokaka Deyso cadaver`,
+    `> !rokakaka Alec stand`,
+    `> !rokakaka pegar João rokakaka`,
+    `> !rokakaka forcar Deyso disco-stand`,
+    `> !rokakaka simular Somelier De Butico maior-peixe`,
     ``,
-    `> Use *itens* para ver a lista numerada do alvo.`
+    `> A troca só acontece se o bot achar uma compensação equivalente.`
   ].join(rokakakaNlV2());
 }
 
@@ -6426,36 +6638,7 @@ function moveRokakakaEffectsV2(fromPlayer, toPlayer) {
   fromPlayer.effects = [];
 }
 
-
-function moveRokakakaHolyCorpsePartV3(fromPlayer, toPlayer, partKey) {
-  if (typeof ensureHolyCorpseInventory !== "function" || typeof HOLY_CORPSE_PARTS === "undefined") {
-    return;
-  }
-
-  const part = HOLY_CORPSE_PARTS[partKey];
-
-  if (!part) {
-    return;
-  }
-
-  ensureHolyCorpseInventory(fromPlayer);
-  ensureHolyCorpseInventory(toPlayer);
-
-  if (fromPlayer.holyCorpse.parts[partKey] <= 0) {
-    return;
-  }
-
-  fromPlayer.holyCorpse.parts[partKey] -= 1;
-  toPlayer.holyCorpse.parts[partKey] += 1;
-  toPlayer.holyCorpse.lastPartFoundAt = Date.now();
-}
-
 function applyRokakakaAssetMoveV2(state, fromPlayer, toPlayer, asset, snapshots) {
-  if (isRokakakaHolyCorpseAssetV3(asset)) {
-    moveRokakakaHolyCorpsePartV3(fromPlayer, toPlayer, getRokakakaHolyCorpsePartKeyV3(asset));
-    return;
-  }
-
   if (asset === "pinto") {
     moveRokakakaPintoV2(state, fromPlayer, toPlayer, snapshots);
     return;
@@ -6525,37 +6708,13 @@ async function handleRokakakaCommand(message, state, player, arg) {
     await replySafe(
       message,
       [
-        `🍈 *Rokakaka*`,
+        `🍈 *A Rokakaka mudou.*`,
         ``,
-        `Use apenas o nome do alvo e o item desejado.`,
+        `Você não escolhe mais o que vai dar.`,
+        `Agora diga só o alvo e o que quer.`,
         ``,
-        `Exemplos:`,
-        `> !rokakaka Alec itens`,
-        `> !rokakaka Alec 1`,
+        `Exemplo:`,
         `> !rokakaka Alec stand`
-      ].join(rokakakaNlV2())
-    );
-    return;
-  }
-
-  const target = parsed.target;
-  ensureRokakakaSpecialItemsV2(target);
-
-  if (parsed.listItems) {
-    await replySafe(message, formatRokakakaTargetItemsV3(state, target));
-    return;
-  }
-
-  if (parsed.invalidChoice) {
-    await replySafe(
-      message,
-      [
-        `🍈 *Opção inválida.*`,
-        ``,
-        `*${target.name}* não possui item na opção *${parsed.choiceNumber}*.`,
-        ``,
-        `Use:`,
-        `> !rokakaka ${target.name} itens`
       ].join(rokakakaNlV2())
     );
     return;
@@ -6565,6 +6724,9 @@ async function handleRokakakaCommand(message, state, player, arg) {
     await replySafe(message, `🍈 Você não tem Rokakaka.`);
     return;
   }
+
+  const target = parsed.target;
+  ensureRokakakaSpecialItemsV2(target);
 
   const desiredValue = getRokakakaAssetValueV2(state, target, parsed.desiredAsset);
 
@@ -6576,8 +6738,7 @@ async function handleRokakakaCommand(message, state, player, arg) {
         ``,
         `*${target.name}* não possui: *${getRokakakaAssetLabelV2(parsed.desiredAsset)}*.`,
         ``,
-        `Use a lista numerada:`,
-        `> !rokakaka ${target.name} itens`
+        `Use *!rokakaka* para ver os itens possíveis.`
       ].join(rokakakaNlV2())
     );
     return;
@@ -8796,6 +8957,7 @@ function adminRootMainMenuV3() {
     `• !admin iscas`,
     `• !admin add-iscas`,
     `• !admin peixe`,
+    `• !admin ranking`,
     ``,
     `🧬 *Itens*`,
     `• !admin rokakaka`,
@@ -8809,6 +8971,8 @@ function adminRootMainMenuV3() {
     `• !admin stand`,
     ``,
     `🍆 *Pinto*`,
+    `• !admin pinto`,
+    `• !admin pau`,
     `• !admin pinto-reset`,
     ``,
     `🧹 *Controle*`,
@@ -8853,6 +9017,8 @@ function adminRootActionTitleV3(action) {
     addStandDisc: `💿 *Adicionar disco de Stand*`,
     cadaver: `✨ *Adicionar parte do Cadáver Santo*`,
     fish: `🎣 *Adicionar peixe administrativo*`,
+    ranking: `🏆 *Alterar ranking*`,
+    pintoEdit: `🍆 *Alterar pinto*`,
     resetCooldowns: `🧊 *Resetar cooldowns*`,
     pintoReset: `🍆 *Resetar pinto*`,
     ban: `🚫 *Banir membro*`
@@ -9102,8 +9268,95 @@ function adminRootAskFishNameTextV3(session) {
   ].join(adminRootNlV3());
 }
 
+function adminRootAskRankingMetricTextV1(session) {
+  return [
+    adminRootActionTitleV3(session.action),
+    ``,
+    `Alvo escolhido: *${session.selected.name}*`,
+    ``,
+    `Escolha qual ranking deseja alterar:`,
+    ``,
+    `1. Peso total`,
+    `2. Quantidade de capturas`,
+    `3. Maior peixe`,
+    `4. Limpar ajustes manuais`,
+    ``,
+    `> Envie apenas o número.`,
+    `> Use *voltar* para retornar.`
+  ].join(adminRootNlV3());
+}
+
+function adminRootAskRankingValueTextV1(session) {
+  const metric = session.action.metric;
+  const title = formatAdminRankingMetricV1(metric);
+
+  if (metric === "weight") {
+    return [
+      adminRootActionTitleV3(session.action),
+      ``,
+      `Alvo escolhido: *${session.selected.name}*`,
+      `Ranking: *${title}*`,
+      ``,
+      `Digite o peso em kg.`,
+      ``,
+      `Exemplos:`,
+      `> +50`,
+      `> -10`,
+      `> 250.5`,
+      `> =250.5`,
+      ``,
+      `Sem sinal ou com *=* define o valor final no ranking.`,
+      `Com *+* ou *-* soma ou remove pontos.`
+    ].join(adminRootNlV3());
+  }
+
+  if (metric === "fish") {
+    return [
+      adminRootActionTitleV3(session.action),
+      ``,
+      `Alvo escolhido: *${session.selected.name}*`,
+      `Ranking: *${title}*`,
+      ``,
+      `Digite a quantidade de capturas.`,
+      ``,
+      `Exemplos:`,
+      `> +5`,
+      `> -2`,
+      `> 30`,
+      `> =30`,
+      ``,
+      `Sem sinal ou com *=* define o valor final no ranking.`
+    ].join(adminRootNlV3());
+  }
+
+  if (metric === "biggest") {
+    return [
+      adminRootActionTitleV3(session.action),
+      ``,
+      `Alvo escolhido: *${session.selected.name}*`,
+      `Ranking: *${title}*`,
+      ``,
+      `Digite o peso e, se quiser, o nome do peixe.`,
+      ``,
+      `Exemplos:`,
+      `> 180 Pirarucu Administrativo`,
+      `> 320.5 Megalodon`,
+      `> limpar`,
+      ``,
+      `> Esse ajuste aparece só no ranking; não adiciona peixe ao histórico.`
+    ].join(adminRootNlV3());
+  }
+
+  return adminRootAskRankingMetricTextV1(session);
+}
+
+
 function adminRootNextStepAfterPlayerV3(action) {
   if (["view", "resetCooldowns", "pintoReset", "ban"].includes(action.type)) return "";
+
+  if (action.type === "pintoEdit") {
+    return action.value ? "" : "askPintoValue";
+  }
 
   if (["setBaits", "addBaits", "addItem"].includes(action.type)) {
     return Number.isFinite(Number(action.amount)) ? "" : "askAmount";
@@ -9126,6 +9379,12 @@ function adminRootNextStepAfterPlayerV3(action) {
   if (action.type === "fish") {
     if (!Number.isFinite(Number(action.kg))) return "askFishKg";
     return action.name ? "" : "askFishName";
+  }
+
+  if (action.type === "ranking") {
+    if (!action.metric) return "askRankingMetric";
+    if (action.metric === "clear") return "";
+    return action.value ? "" : "askRankingValue";
   }
 
   return "";
@@ -9157,6 +9416,21 @@ async function adminRootMoveSessionStepV3(message, session, nextStep) {
 
   if (nextStep === "askFishName") {
     await adminRootReplyV3(message, adminRootAskFishNameTextV3(session));
+    return;
+  }
+
+  if (nextStep === "askRankingMetric") {
+    await adminRootReplyV3(message, adminRootAskRankingMetricTextV1(session));
+    return;
+  }
+
+  if (nextStep === "askRankingValue") {
+    await adminRootReplyV3(message, adminRootAskRankingValueTextV1(session));
+    return;
+  }
+
+  if (nextStep === "askPintoValue") {
+    await adminRootReplyV3(message, adminRootAskPintoValueTextV1(session));
     return;
   }
 
@@ -9198,6 +9472,14 @@ function adminRootFormatPlayerCardV3(state, player) {
     `> Lixos: ${Number(player.totalTrash || 0)}`,
     `> Lendas: ${Number(player.totalLegendary || 0)}`,
     `> Peso total: ${formatWeight(player.totalWeight || 0)}`,
+    ``,
+    `🏆 *Ranking*`,
+    `> Peso no ranking: ${formatWeight(getRankingTotalWeightV1(player))}`,
+    `> Capturas no ranking: ${getRankingTotalFishV1(player)}`,
+    `> Ajuste manual: ${getRankingAdjustmentSummaryV1(player)}`,
+    ``,
+    `🍆 *Pinto*`,
+    `> ${adminRootFormatPintoRecordV1(adminRootGetPintoRecordForPlayerV1(state, player))}`,
     ``,
     `🐳 *Maior peixe*`,
     `> ${player.biggestCatch ? `${player.biggestCatch.name} (${formatWeight(player.biggestCatch.weightKg)})` : "Nenhum"}`,
@@ -9574,6 +9856,178 @@ async function adminRootApplyActionV3(message, session) {
     return;
   }
 
+  if (action.type === "ranking") {
+    ensureAdminRankingAdjustmentsV1(player);
+
+    if (action.metric === "clear") {
+      const before = getRankingAdjustmentSummaryV1(player);
+      clearAdminRankingAdjustmentsV1(player);
+
+      adminRootCommitV3(state);
+      adminRootClearSessionV3(message);
+
+      await adminRootReplyV3(
+        message,
+        [
+          `🏆 *Ajustes de ranking limpos*`,
+          ``,
+          `${player.name}`,
+          `> Antes: ${before}`,
+          `> Agora: sem ajuste manual.`
+        ].join(adminRootNlV3())
+      );
+      return;
+    }
+
+    if (["weight", "fish"].includes(action.metric)) {
+      const result = applyAdminRankingNumberChangeV1(player, action.metric, action.value);
+
+      if (!result) {
+        await adminRootReplyV3(
+          message,
+          [
+            `⚠️ *Valor inválido*`,
+            ``,
+            `Use números como:`,
+            `> +10`,
+            `> -5`,
+            `> =100`,
+            `> 100`
+          ].join(adminRootNlV3())
+        );
+        session.step = "askRankingValue";
+        adminRootSetSessionV3(message, session);
+        return;
+      }
+
+      player.adminRanking.updatedAt = Date.now();
+      player.adminRanking.updatedBy = adminRootDigitsV3(message?.from || message?.author || "");
+
+      adminRootCommitV3(state);
+      adminRootClearSessionV3(message);
+
+      await adminRootReplyV3(
+        message,
+        [
+          `🏆 *Ranking alterado*`,
+          ``,
+          `${player.name}`,
+          `> Ranking: ${result.label}`,
+          `> Antes: ${result.before}`,
+          `> Agora: *${result.after}*`,
+          `> Ajuste salvo: ${result.adjustment}`,
+          ``,
+          `> O histórico de pescas não foi alterado.`
+        ].join(adminRootNlV3())
+      );
+      return;
+    }
+
+    if (action.metric === "biggest") {
+      const parsed = parseAdminRankingBiggestValueV1(action.value);
+
+      if (!parsed) {
+        await adminRootReplyV3(
+          message,
+          [
+            `⚠️ *Valor inválido*`,
+            ``,
+            `Use:`,
+            `> 180 Pirarucu Administrativo`,
+            `> limpar`
+          ].join(adminRootNlV3())
+        );
+        session.step = "askRankingValue";
+        adminRootSetSessionV3(message, session);
+        return;
+      }
+
+      const beforeCatch = getRankingBiggestCatchV1(player);
+      const before = beforeCatch ? `${beforeCatch.name} (${formatWeight(beforeCatch.weightKg)})` : "Nenhum";
+
+      if (parsed.clear) {
+        player.adminRanking.biggestCatch = null;
+      } else {
+        player.adminRanking.biggestCatch = {
+          cid: uid("adminrank"),
+          kind: "fish",
+          name: parsed.name,
+          emoji: "🐟",
+          rarity: parsed.kg >= 200 ? "administrativo lendário" : "administrativo",
+          weightKg: round(parsed.kg),
+          caughtAt: Date.now(),
+          source: "admin_ranking"
+        };
+      }
+
+      player.adminRanking.updatedAt = Date.now();
+      player.adminRanking.updatedBy = adminRootDigitsV3(message?.from || message?.author || "");
+
+      adminRootCommitV3(state);
+      adminRootClearSessionV3(message);
+
+      const afterCatch = getRankingBiggestCatchV1(player);
+      const after = afterCatch ? `${afterCatch.name} (${formatWeight(afterCatch.weightKg)})` : "Nenhum";
+
+      await adminRootReplyV3(
+        message,
+        [
+          `🏆 *Maior peixe do ranking alterado*`,
+          ``,
+          `${player.name}`,
+          `> Antes: ${before}`,
+          `> Agora: *${after}*`,
+          ``,
+          `> O histórico de pescas não foi alterado.`
+        ].join(adminRootNlV3())
+      );
+      return;
+    }
+
+    session.step = "askRankingMetric";
+    adminRootSetSessionV3(message, session);
+    await adminRootReplyV3(message, adminRootAskRankingMetricTextV1(session));
+    return;
+  }
+
+  if (action.type === "pintoEdit") {
+    const result = adminRootApplyPintoEditV1(state, player, action.value);
+
+    if (!result) {
+      await adminRootReplyV3(
+        message,
+        [
+          `⚠️ *Valor inválido*`,
+          ``,
+          `Use um formato válido:`,
+          `> 850`,
+          `> =850`,
+          `> +50`,
+          `> 850 ereto=24 flacido=11 circ=14`,
+          `> limpar`
+        ].join(adminRootNlV3())
+      );
+      return;
+    }
+
+    saveState(state);
+    adminRootClearSessionV3(message);
+
+    await adminRootReplyV3(
+      message,
+      [
+        result.cleared ? `🍆 *Pinto resetado*` : `🍆 *Pinto alterado*`,
+        ``,
+        `${player.name}`,
+        `> Antes: ${result.before}`,
+        `> Depois: *${result.after}*`,
+        ``,
+        `> O *!pinto-ranking* deste grupo já foi atualizado.`
+      ].join(adminRootNlV3())
+    );
+    return;
+  }
+
   if (action.type === "resetCooldowns") {
     player.standCooldownUntil = 0;
     player.activeStandBuff = null;
@@ -9772,6 +10226,46 @@ async function adminRootHandleSessionInputV3(message, rawBody) {
     return true;
   }
 
+  if (session.step === "askRankingMetric") {
+    const metric = normalizeAdminRankingMetricV1(input);
+
+    if (!metric) {
+      await adminRootReplyV3(
+        message,
+        [
+          `⚠️ *Ranking inválido*`,
+          ``,
+          `Escolha uma opção da lista:`,
+          ``,
+          adminRootAskRankingMetricTextV1(session)
+        ].join(adminRootNlV3())
+      );
+      return true;
+    }
+
+    session.action.metric = metric;
+
+    if (metric === "clear") {
+      await adminRootApplyActionV3(message, session);
+      return true;
+    }
+
+    await adminRootMoveSessionStepV3(message, session, "askRankingValue");
+    return true;
+  }
+
+  if (session.step === "askRankingValue") {
+    session.action.value = input;
+    await adminRootApplyActionV3(message, session);
+    return true;
+  }
+
+  if (session.step === "askPintoValue") {
+    session.action.value = input;
+    await adminRootApplyActionV3(message, session);
+    return true;
+  }
+
   adminRootClearSessionV3(message);
   await adminRootReplyV3(message, adminRootMainMenuV3());
   return true;
@@ -9786,7 +10280,7 @@ async function adminRootListPlayersMessageV3(message) {
   const rows = options.map((option, index) => {
     const player = state.players?.[option.id];
     const detail = player
-      ? ` — ${formatWeight(player.totalWeight || 0)} — ${Number(player.baits || 0)}/${getMaxBaits(player)} iscas`
+      ? ` — ${formatWeight(getRankingTotalWeightV1(player))} — ${getRankingTotalFishV1(player)} capturas — ${Number(player.baits || 0)}/${getMaxBaits(player)} iscas`
       : ` — sem ficha`;
 
     return `${index + 1}. ${option.name}${detail}`;
@@ -10000,7 +10494,35 @@ async function adminRootHandleCommandV3(message, arg) {
     return;
   }
 
-  if (["peixe", "add-peixe", "pontuacao", "pontuação"].includes(sub)) {
+  if (["ranking", "rank", "rankings", "pontuacao", "pontuação", "score", "placar"].includes(sub)) {
+    const rawMetric = parts.length ? parts.shift() : "";
+    const metric = normalizeAdminRankingMetricV1(rawMetric);
+    const value = parts.join(" ").trim();
+
+    if (rawMetric && !metric) {
+      await adminRootReplyV3(
+        message,
+        [
+          `🏆 *Alterar ranking*`,
+          ``,
+          `Ranking inválido:`,
+          `> ${rawMetric}`,
+          ``,
+          `Use:`,
+          `• !admin ranking peso +50`,
+          `• !admin ranking quantidade =30`,
+          `• !admin ranking maior-peixe 180 Pirarucu`,
+          `• !admin ranking limpar`
+        ].join(adminRootNlV3())
+      );
+      return;
+    }
+
+    await adminRootStartPlayerPickerV3(message, { type: "ranking", metric, value });
+    return;
+  }
+
+  if (["peixe", "add-peixe"].includes(sub)) {
     const kg = parts.length ? adminRootParseNumberV3(parts.shift(), null) : null;
     const name = parts.join(" ").trim();
     await adminRootStartPlayerPickerV3(message, { type: "fish", kg, name });
@@ -10012,7 +10534,13 @@ async function adminRootHandleCommandV3(message, arg) {
     return;
   }
 
-  if (["pinto-reset", "reset-pinto"].includes(sub)) {
+  if (["pinto", "pau", "pinto-score", "pau-score", "pinto-ranking", "pau-ranking"].includes(sub)) {
+    const value = parts.join(" ").trim();
+    await adminRootStartPlayerPickerV3(message, { type: "pintoEdit", value });
+    return;
+  }
+
+  if (["pinto-reset", "reset-pinto", "pau-reset", "reset-pau"].includes(sub)) {
     await adminRootStartPlayerPickerV3(message, { type: "pintoReset" });
     return;
   }
